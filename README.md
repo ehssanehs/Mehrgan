@@ -100,6 +100,152 @@ wget -O install.sh https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/i
 
 **توجه:** فرآیند آپدیت ممکن است چند دقیقه طول بکشد. در این مدت سایت شما در حالت "تعمیر" خواهد بود.
 
+## 🆕 ویژگی‌های جدید (VPNMarket-Enhanced)
+
+### 📥 Feature 1: Import Existing Subscription
+
+امکان وارد کردن اشتراک‌های موجود از پنل‌های X-UI و مرزبان به داخل VPNMarket.
+
+**قابلیت‌ها:**
+- پشتیبانی هم در وب‌سایت و هم در ربات تلگرام
+- ورودی: لینک VLESS (`vless://uuid@host...`) یا Subscription URL (`https://.../sub/...`)
+- برای Subscription URL: دانلود، decode base64 در صورت نیاز، استخراج اولین VLESS و استفاده از UUID آن
+- اعتبارسنجی UUID، بررسی تکراری بودن (جلوگیری از مالکیت چندکاربره روی یک UUID)
+- جستجو در تمام سرورهای MultiServer و تنظیمات قدیمی
+- خواندن اطلاعات کامل از پنل: نام کاربری، ترافیک، محدودیت، انقضا، وضعیت، inbound، subId و...
+- ایجاد سفارش با وضعیت `paid` که دقیقاً مانند سفارش‌های عادی رفتار می‌کند (مشاهده مصرف، تمدید، اعلان تلگرام، وب و ربات)
+- محافظت در برابر SSRF (مسدودسازی IPهای خصوصی، localhost)
+- مدیریت خطا: URL نامعتبر، VLESS نامعتبر، UUID نامعتبر، پنل غیرقابل دسترس، محتوای خراب، تکرار، تایم‌اوت، احراز هویت ناموفق
+
+**وب‌سایت:**
+- مسیر: `/subscription/import`
+- دکمه جدید در داشبورد: “📥 Import Existing Subscription”
+- فرم با textarea برای وارد کردن لینک
+
+**ربات تلگرام:**
+- منوی جدید: `📥 Import Existing Subscription` (Reply Keyboard)
+- اینلاین: `📥 Import Subscription` در منوی اصلی
+- جریان: Main Menu → Import → Paste VLESS/URL → Validation → Import → Success/Error
+- state: `awaiting_import_subscription`
+- دستورات: `/import_subscription` callback و `import_retry`
+
+**امنیت:**
+- اعتبارسنجی UUID با regex
+- فقط `http/https` مجاز
+- مسدودسازی `127.0.0.1`, `localhost`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `::1`
+- بررسی DNS که به IP خصوصی resolve نشود
+- جلوگیری از XSS, SQL Injection (Eloquent), Command Injection
+
+---
+
+### 🔢 Feature 2: Automatic Sequential Client Names
+
+جایگزینی سیستم نام‌گذاری دستی `user-{id}-order-{id}` با سیستم ترتیبی قابل تنظیم.
+
+**تنظیمات ادمین:**
+- مسیر Filament: مدیریت کاربران → تنظیمات نام‌گذاری ترتیبی
+- فیلدها:
+  - فعال‌سازی/غیرفعال‌سازی (Toggle)
+  - پیشوند (TextInput) مثال: `server1u`
+  - شمارنده فعلی (read-only)
+  - پیش‌نمایش نام بعدی
+  - دکمه ریست شمارنده (با تایید)
+
+**رفتار:**
+- فعال: `server1u1`, `server1u2`, `server1u3`, ...
+- شماره‌ها همیشه افزایشی، حذف کاربران باعث استفاده مجدد نمی‌شود
+- مثال: `server1u1, server1u2, server1u3` → حذف `server1u2` → بعدی `server1u4`
+- تغییر پیشوند: `server1u` → `eu-` → شمارنده ریست از 1: `eu-1, eu-2, ...`
+- نام تولید شده هم در دیتابیس VPNMarket و هم در پنل Xray/XUI استفاده می‌شود
+- اگر نام سفارشی (custom_username) وارد شود، اولویت با آن است
+- اگر غیرفعال باشد، از نام‌گذاری قدیمی `user-{id}-order-{id}` استفاده می‌شود
+
+**دیتابیس:**
+- جدول جدید `sequential_naming_settings`: `id`, `prefix`, `counter`, `is_enabled`, `timestamps`
+- سرویس `ClientNamingService` با تراکنش و `lockForUpdate` برای جلوگیری از race condition
+- لاگ کامل در هر تولید نام
+
+---
+
+### 🗄️ مهاجرت‌ها (Migrations)
+
+1. `2026_07_27_000001_create_sequential_naming_settings_table.php`
+   - ایجاد جدول و seed اولیه `server1u / 0 / false`
+
+2. `2026_07_27_000002_add_import_fields_to_orders_table.php`
+   - اضافه کردن `is_imported` (boolean), `import_meta` (json), ایندکس روی `panel_client_id`
+   - اضافه کردن `show_renewal_notification` و `bot_state` به users اگر وجود نداشته باشد
+
+**دستور:**
+```bash
+php artisan migrate
+```
+
+---
+
+### 🔌 APIها و سرویس‌های جدید
+
+- `App\Services\VlessParserService`: extract, validate, parse subscription content, detect type
+- `App\Services\SubscriptionFetcherService`: fetch با SSRF protection, timeout 15s
+- `App\Services\PanelSearchService`: جستجو در تمام سرورهای ms_servers + legacy settings
+- `App\Services\SubscriptionImportService`: منطق اصلی import
+- `App\Services\ClientNamingService`: تولید نام ترتیبی
+- `App\Models\SequentialNamingSetting`: مدل تنظیمات
+
+**متدهای جدید در `XUIService`:**
+- `findClientByUuid(string $uuid): ?array`
+- `getInboundWithClientStats(int $inboundId): ?array`
+- `getClientTraffics(int $inboundId): array`
+
+**متدهای جدید در `MarzbanService`:**
+- `getUsers(int $offset, int $limit): ?array`
+- `getAllUsers(): array`
+- `findUserByUuid(string $uuid): ?array`
+
+---
+
+### 🤖 تغییرات ربات تلگرام
+
+- Reply Keyboard: اضافه شدن `📥 Import Existing Subscription`
+- Inline Keyboard: `📥 Import Subscription` + `🧪 اکانت تست`
+- Callback: `/import_subscription`, `import_retry`, `/cancel_action`
+- State جدید: `awaiting_import_subscription`
+- متدها: `showImportPrompt()`, `processImportSubscription()`
+- Sequential naming: `promptForUsername` حالا اگر sequential فعال باشد، مستقیم نام ترتیبی تولید و به خرید ادامه می‌دهد
+
+---
+
+### 🧪 تست‌ها
+
+تست‌های جدید در `tests/`:
+
+- `Unit/VlessParserServiceTest`: UUID validation, VLESS extraction, input type detection, base64 parsing, first UUID logic
+- `Unit/SubscriptionFetcherServiceTest`: invalid URL, SSRF blocking (127.0.0.1, localhost, private ranges)
+- `Unit/SequentialNamingTest` (RefreshDatabase): sequential generation, no reuse after delete, prefix change restarts, fallback when disabled, custom override, reset counter, admin settings
+- `Feature/SubscriptionImportTest`: invalid input, duplicate protection (same user, different user), structure test with mock, auth required, view import page
+- `Feature/TelegramImportTest`: bot state handling, VLESS vs URL detection, main menu includes import button
+
+**اجرای تست:**
+```bash
+php artisan test
+# یا
+./vendor/bin/pest
+```
+
+---
+
+### 📝 دستورالعمل مهاجرت
+
+1. بکاپ دیتابیس
+2. `git pull origin main`
+3. `composer install`
+4. `php artisan migrate` (دو مایگریشن جدید)
+5. `php artisan config:clear && php artisan cache:clear`
+6. وارد پنل ادمین شوید → مدیریت کاربران → تنظیمات نام‌گذاری ترتیبی → تنظیمات دلخواه
+7. برای تست import: داشبورد → Import Existing Subscription
+
+---
+
 ## 🤝 مشارکت در پروژه
 
 ما همیشه از مشارکت شما استقبال می‌کنیم! اگر ایده‌ای برای بهبود پروژه دارید، باگی پیدا کرده‌اید یا می‌خواهید قابلیت جدیدی اضافه کنید، لطفاً از طریق بخش **Issues** یا **Pull Requests** در گیت‌هاب با ما در ارتباط باشید.
@@ -107,3 +253,4 @@ wget -O install.sh https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/i
 ## 📄 مجوز استفاده (License)
 
 این پروژه تحت [لایسنس MIT](https://opensource.org/licenses/MIT) منتشر شده است. استفاده، تغییر و توزیع آن برای همگان آزاد است.
+
