@@ -602,6 +602,8 @@ class WebhookController extends BaseController
         if ($user->bot_state) {
             if ($user->bot_state === 'awaiting_deposit_amount') {
                 $this->processDepositAmount($user, $text);
+            } elseif ($user->bot_state === 'awaiting_import_subscription') {
+                $this->processImportSubscription($user, $text);
             } elseif (Str::startsWith($user->bot_state, 'awaiting_new_ticket_') || Str::startsWith($user->bot_state, 'awaiting_ticket_reply')) {
                 $this->processTicketConversation($user, $text, $update);
             } elseif (Str::startsWith($user->bot_state, 'awaiting_discount_code|')) {
@@ -646,6 +648,10 @@ class WebhookController extends BaseController
                 break;
             case '🔐 اطلاعات ورود به سایت':
                 $this->sendSiteCredentials($user);
+                break;
+            case '📥 Import Existing Subscription':
+            case 'Import Existing Subscription':
+                $this->showImportPrompt($user);
                 break;
 
 
@@ -741,6 +747,106 @@ class WebhookController extends BaseController
         $message .= "🔹 مثال: `arvin123` یا `myvpn`";
 
         $this->sendOrEditMessage($user->telegram_chat_id, $message, $keyboard, $messageId);
+    }
+
+    protected function showImportPrompt(User $user, ?int $messageId = null)
+    {
+        $user->update(['bot_state' => 'awaiting_import_subscription']);
+
+        $keyboard = Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '❌ انصراف', 'callback_data' => '/cancel_action'])]);
+
+        $message = "📥 *Import Existing Subscription*\n\n";
+        $message .= $this->escape("لطفاً یکی از موارد زیر را ارسال کنید:") . "\n\n";
+        $message .= "1️⃣ " . $this->escape("یک لینک VLESS (مثال: vless://...)") . "\n";
+        $message .= "2️⃣ " . $this->escape("یک Subscription URL (مثال: https://...)") . "\n\n";
+        $message .= $this->escape("سیستم UUID را استخراج کرده و در پنل‌های شما جستجو می‌کند.") . "\n";
+        $message .= $this->escape("در صورت یافت شدن، اشتراک به حساب شما متصل می‌شود و مانند اشتراک‌های عادی عمل می‌کند.");
+
+        $this->sendOrEditMessage($user->telegram_chat_id, $message, $keyboard, $messageId);
+    }
+
+    protected function processImportSubscription(User $user, string $input, ?int $messageId = null)
+    {
+        $input = trim($input);
+
+        if (empty($input)) {
+            $this->showImportPrompt($user, $messageId);
+            return;
+        }
+
+        // Basic security: limit length
+        if (strlen($input) > 10000) {
+            Telegram::sendMessage([
+                'chat_id' => $user->telegram_chat_id,
+                'text' => $this->escape("❌ ورودی بیش از حد طولانی است."),
+                'parse_mode' => 'MarkdownV2',
+                'reply_markup' => Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '🔄 تلاش مجدد', 'callback_data' => 'import_retry'])]),
+            ]);
+            return;
+        }
+
+        Telegram::sendMessage([
+            'chat_id' => $user->telegram_chat_id,
+            'text' => $this->escape("⏳ در حال بررسی و وارد کردن اشتراک... لطفاً صبر کنید."),
+            'parse_mode' => 'MarkdownV2',
+        ]);
+
+        try {
+            $result = SubscriptionImportService::import($input, $user, 'telegram');
+
+            $user->update(['bot_state' => null]);
+
+            if ($result['success']) {
+                $order = $result['order'];
+                $message = "✅ *اشتراک با موفقیت وارد شد*\n\n";
+                $message .= "👤 *نام کاربری:* `{$this->escape($order->panel_username)}`\n";
+                $message .= "🔑 *UUID:* `{$order->panel_client_id}`\n";
+                $message .= "📅 *انقضا:* {$order->expires_at?->format('Y-m-d')}\n";
+                $message .= "🔗 *لینک:* `{$this->escape(substr($order->config_details,0,80))}`\n\n";
+                $message .= $this->escape("این اشتراک اکنون مانند اشتراک‌های عادی در بخش سرویس‌های من قابل مشاهده است.");
+
+                $keyboard = Keyboard::make()->inline()
+                    ->row([Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services'])])
+                    ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+                Telegram::sendMessage([
+                    'chat_id' => $user->telegram_chat_id,
+                    'text' => $message,
+                    'parse_mode' => 'MarkdownV2',
+                    'reply_markup' => $keyboard,
+                ]);
+            } else {
+                $error = $result['error'] ?? 'خطای نامشخص';
+                $message = "❌ *خطا در وارد کردن اشتراک*\n\n";
+                $message .= $this->escape($error);
+
+                $keyboard = Keyboard::make()->inline()
+                    ->row([Keyboard::inlineButton(['text' => '🔄 تلاش مجدد', 'callback_data' => 'import_retry'])])
+                    ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+                Telegram::sendMessage([
+                    'chat_id' => $user->telegram_chat_id,
+                    'text' => $message,
+                    'parse_mode' => 'MarkdownV2',
+                    'reply_markup' => $keyboard,
+                ]);
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Telegram import exception', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $user->update(['bot_state' => null]);
+
+            Telegram::sendMessage([
+                'chat_id' => $user->telegram_chat_id,
+                'text' => $this->escape("❌ خطای سیستمی در وارد کردن اشتراک. لطفاً بعداً تلاش کنید."),
+                'parse_mode' => 'MarkdownV2',
+                'reply_markup' => Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]),
+            ]);
+        }
     }
 
     /**
@@ -1042,6 +1148,9 @@ class WebhookController extends BaseController
                     ]);
                     try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
                     break;
+                case '/import_subscription':
+                    $this->showImportPrompt($user, $messageId);
+                    break;
                 case '/plans': $this->sendPlans($chatId, $messageId); break;
                 case '/my_services': $this->sendMyServices($user, $messageId); break;
                 case '/wallet': $this->sendWalletMenu($user, $messageId); break;
@@ -1076,6 +1185,9 @@ class WebhookController extends BaseController
                     }
                     break;
 
+                case 'import_retry':
+                    $this->showImportPrompt($user, $messageId);
+                    break;
                 case '/cancel_action':
                     $user->update(['bot_state' => null]);
                     try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
@@ -4120,8 +4232,12 @@ class WebhookController extends BaseController
                 Keyboard::inlineButton(['text' => '🎁 دعوت از دوستان', 'callback_data' => '/referral']),
             ])
             ->row([
-                Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']),
+                Keyboard::inlineButton(['text' => '📥 Import Subscription', 'callback_data' => '/import_subscription']),
                 Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
+            ])
+            ->row([
+                Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']),
+                Keyboard::inlineButton(['text' => '🧪 اکانت تست', 'callback_data' => 'trial_request']),
             ]);
     }
 

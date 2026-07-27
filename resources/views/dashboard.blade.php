@@ -132,6 +132,12 @@
                 <div class="p-2 sm:p-4">
 
                     <div x-show="tab === 'my_services'" x-transition.opacity>
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+                            <h2 class="text-xl font-bold text-gray-900 dark:text-white">سرویس‌های من</h2>
+                            <a href="{{ route('subscription.import.show') }}" class="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition flex items-center gap-2">
+                                📥 Import Existing Subscription
+                            </a>
+                        </div>
                         @if($orders->isNotEmpty())
                             <div class="space-y-4">
                                 @foreach ($orders as $order)
@@ -139,11 +145,24 @@
                                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-center text-right">
                                             <div>
                                                 <span class="text-xs text-gray-500">پلن</span>
-                                                <p class="font-bold text-gray-900 dark:text-white">{{ $order->plan->name }} ({{ $order->plan->duration_label }})</p>
+                                                <p class="font-bold text-gray-900 dark:text-white">
+                                                    @if($order->plan)
+                                                        {{ $order->plan->name }} ({{ $order->plan->duration_label }})
+                                                    @else
+                                                        {{ $order->is_imported ? 'Imported' : 'نامشخص' }}
+                                                        @if($order->is_imported)<span class="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px]">📥 Imported</span>@endif
+                                                    @endif
+                                                </p>
                                             </div>
                                             <div>
                                                 <span class="text-xs text-gray-500">حجم</span>
-                                                <p class="font-bold text-gray-900 dark:text-white">{{ $order->plan->volume_gb }} GB</p>
+                                                <p class="font-bold text-gray-900 dark:text-white">
+                                                    @if($order->plan)
+                                                        {{ $order->plan->volume_gb }} GB
+                                                    @else
+                                                        {{ isset($order->import_meta['totalGB']) ? round(($order->import_meta['totalGB']/1073741824),1).' GB' : (isset($order->import_meta['data_limit']) ? round($order->import_meta['data_limit']/1073741824,1).' GB' : '—') }}
+                                                    @endif
+                                                </p>
                                             </div>
                                             <div>
                                                 <span class="text-xs text-gray-500">وضعیت</span>
@@ -187,7 +206,7 @@
                                                         </button>
 
                                                         <!-- دکمه نمایش QR Code -->
-                                                        <button @click="$store.qrModal.open('{{ $order->config_details }}', '{{ $order->plan->name }}')" class="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center gap-1">
+                                                        <button @click="$store.qrModal.open('{{ $order->config_details }}', '{{ $order->plan->name ?? ($order->panel_username ?? 'Imported') }}')" class="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors flex items-center gap-1">
                                                             📱 QR Code
                                                         </button>
                                                     </div>

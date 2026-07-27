@@ -3,6 +3,7 @@
 use App\Http\Controllers\Agent\WebAppController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SubscriptionImportController;
 
 
 use App\Models\Plan;
@@ -134,12 +135,20 @@ Route::middleware(['auth'])->group(function () {
             session()->flash('renewal_success', 'سرویس شما با موفقیت تمدید شد. لینک اشتراک شما تغییر کرده است، لطفاً لینک جدید را کپی و در نرم‌افزار خود آپدیت کنید.');
             $user->update(['show_renewal_notification' => false]);
         }
-        $orders = $user->orders()->with('plan')->whereNotNull('plan_id')->whereNull('renews_order_id')->latest()->get();
+        // Include imported orders as well as regular ones
+        $orders = $user->orders()->with('plan')->where(function($q){
+            $q->whereNotNull('plan_id')->orWhere('is_imported', true);
+        })->whereNull('renews_order_id')->latest()->get();
         $transactions = $user->orders()->with('plan')->latest()->get();
         $plans = Plan::where('is_active', true)->orderBy('price')->get();
         $tickets = $user->tickets()->latest()->get();
         return view('dashboard', compact('orders', 'plans', 'tickets', 'transactions'));
     })->name('dashboard');
+
+    // Subscription Import
+    Route::get('/subscription/import', [SubscriptionImportController::class, 'show'])->name('subscription.import.show');
+    Route::post('/subscription/import', [SubscriptionImportController::class, 'store'])->name('subscription.import.store');
+    Route::post('/subscription/import/api', [SubscriptionImportController::class, 'apiImport'])->name('subscription.import.api');
 
     // Wallet
     Route::get('/wallet/charge', [OrderController::class, 'showChargeForm'])->name('wallet.charge.form');
