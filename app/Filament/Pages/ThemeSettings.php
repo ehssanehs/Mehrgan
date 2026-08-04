@@ -11,6 +11,7 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Tabs;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -60,6 +61,20 @@ class ThemeSettings extends Page implements HasForms
                     $parts = preg_split('/[,\s،]+/', $value, -1, PREG_SPLIT_NO_EMPTY);
                     $settings[$key] = !empty($parts) ? $parts : [];
                 }
+            }
+        }
+
+        // Convert old single-card format to new multi-card Repeater format
+        if (!isset($settings['payment_cards']) || empty($settings['payment_cards'])) {
+            $oldCardNumber = $settings['payment_card_number'] ?? null;
+            $oldCardHolder = $settings['payment_card_holder_name'] ?? null;
+            if ($oldCardNumber) {
+                $settings['payment_cards'] = [[
+                    'card_number' => $oldCardNumber,
+                    'card_holder' => $oldCardHolder ?? '',
+                ]];
+            } else {
+                $settings['payment_cards'] = [];
             }
         }
 
@@ -199,17 +214,31 @@ class ThemeSettings extends Page implements HasForms
                         ]),
 
                     Tabs\Tab::make('تنظیمات پرداخت')->icon('heroicon-o-credit-card')->schema([
-                        Section::make('پرداخت کارت به کارت')->schema([
-                            TextInput::make('payment_card_number')
-                                ->label('شماره کارت')
-                                ->mask('9999-9999-9999-9999')
-                                ->placeholder('XXXX-XXXX-XXXX-XXXX')
-                                ->helperText('شماره کارت ۱۶ رقمی خود را وارد کنید.')
-                                ->numeric(false)
-                                ->validationAttribute('شماره کارت'),
-                            TextInput::make('payment_card_holder_name')->label('نام صاحب حساب'),
-                            Textarea::make('payment_card_instructions')->label('توضیحات اضافی')->rows(3),
-                        ]),
+                        Section::make('پرداخت کارت به کارت')
+                            ->description('می‌توانید چندین شماره کارت اضافه کنید. هنگام پرداخت، یکی از کارت‌ها به‌صورت تصادفی به کاربر نمایش داده می‌شود.')
+                            ->schema([
+                                Repeater::make('payment_cards')
+                                    ->label('کارت‌های بانکی')
+                                    ->addActionLabel('افزودن کارت جدید')
+                                    ->reorderable()
+                                    ->schema([
+                                        TextInput::make('card_number')
+                                            ->label('شماره کارت')
+                                            ->mask('9999-9999-9999-9999')
+                                            ->placeholder('XXXX-XXXX-XXXX-XXXX')
+                                            ->helperText('شماره کارت ۱۶ رقمی خود را وارد کنید.')
+                                            ->numeric(false)
+                                            ->validationAttribute('شماره کارت')
+                                            ->required(),
+                                        TextInput::make('card_holder')
+                                            ->label('نام صاحب حساب')
+                                            ->placeholder('به نام ...')
+                                            ->required(),
+                                    ])
+                                    ->columns(2)
+                                    ->helperText('هر بار که کاربر بخواهد کارت به کارت پرداخت کند، یکی از کارت‌های بالا به‌صورت تصادفی انتخاب و نمایش داده می‌شود.'),
+                                Textarea::make('payment_card_instructions')->label('توضیحات اضافی (برای همه کارت‌ها)')->rows(3),
+                            ]),
                     ]),
 
                     Tabs\Tab::make('تنظیمات ربات تلگرام')->icon('heroicon-o-paper-airplane')->schema([
@@ -304,6 +333,11 @@ class ThemeSettings extends Page implements HasForms
 
             Cache::forget("setting.{$key}");
         }
+
+        // Clean up old single-card keys (migrated to payment_cards Repeater)
+        \App\Models\Setting::whereIn('key', ['payment_card_number', 'payment_card_holder_name'])->delete();
+        Cache::forget("setting.payment_card_number");
+        Cache::forget("setting.payment_card_holder_name");
 
         // پاک کردن کش‌های مرتبط
         Cache::forget('inbounds_dropdown');

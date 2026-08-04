@@ -397,6 +397,8 @@ class OrderController extends Controller
 
         $settings = Setting::all()->pluck('value', 'key');
 
+        // Pick a random card from the available cards
+        $card = Setting::getRandomPaymentCard();
 
         $finalAmount = $order->amount;
 
@@ -404,6 +406,9 @@ class OrderController extends Controller
             'order' => $order,
             'settings' => $settings,
             'finalAmount' => $finalAmount,
+            'cardNumber' => $card['card_number'],
+            'cardHolder' => $card['card_holder'],
+            'cardInstructions' => $card['instructions'],
         ]);
     }
 
