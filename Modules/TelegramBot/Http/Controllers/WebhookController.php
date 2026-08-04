@@ -4952,10 +4952,11 @@ class WebhookController extends BaseController
                 'trace' => $exception->getTraceAsString(),
             ]);
 
-            // If editing failed, or if Telegram rejected an optional keyboard or
-            // Markdown formatting, retry as a plain new message. This prevents
-            // a bad optional UI setting from making the bot appear unresponsive.
-            unset($payload['message_id'], $payload['reply_markup']);
+            // If editing failed, retry as a new message first while keeping
+            // the keyboard. If Telegram rejected the optional keyboard or
+            // Markdown formatting, the nested retries below remove those
+            // optional fields instead of making the bot appear unresponsive.
+            unset($payload['message_id']);
             try {
                 Telegram::sendMessage($payload);
             } catch (\Throwable $fallbackException) {
@@ -4963,6 +4964,17 @@ class WebhookController extends BaseController
                     'chat_id' => $chatId,
                     'error' => $fallbackException->getMessage(),
                 ]);
+
+                unset($payload['reply_markup']);
+                try {
+                    Telegram::sendMessage($payload);
+                    return;
+                } catch (\Throwable $plainFallbackException) {
+                    Log::error('Failed to send Telegram fallback without keyboard.', [
+                        'chat_id' => $chatId,
+                        'error' => $plainFallbackException->getMessage(),
+                    ]);
+                }
 
                 // A custom message can also contain invalid MarkdownV2. The
                 // plain-text retry is the last safe attempt before returning.
