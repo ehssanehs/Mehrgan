@@ -40,6 +40,24 @@ class ManageTelegramBotSettings extends Page implements HasForms
             $settings['deposit_amounts'] = [];
         }
 
+        // Convert old single-card format to new multi-card Repeater format for agent deposit
+        if (isset($settings['agent_deposit_cards'])) {
+            $decodedCards = json_decode($settings['agent_deposit_cards'], true);
+            $settings['agent_deposit_cards'] = is_array($decodedCards) ? $decodedCards : [];
+        } else {
+            // Migrate from old single-card format
+            $oldCardNumber = $settings['agent_deposit_card_number'] ?? null;
+            $oldCardName = $settings['agent_deposit_card_name'] ?? null;
+            if ($oldCardNumber) {
+                $settings['agent_deposit_cards'] = [[
+                    'card_number' => $oldCardNumber,
+                    'card_holder' => $oldCardName ?? '',
+                ]];
+            } else {
+                $settings['agent_deposit_cards'] = [];
+            }
+        }
+
 
         $this->currentAmounts = $settings['deposit_amounts'];
 
@@ -86,12 +104,24 @@ class ManageTelegramBotSettings extends Page implements HasForms
 
                 Section::make('تنظیمات نمایندگی')
                     ->schema([
-                        TextInput::make('agent_deposit_card_number')
-                            ->label('شماره کارت برای شارژ نمایندگان')
-                            ->helperText('این شماره در صفحه شارژ کیف پول مینی‌اپ نمایندگی نمایش داده می‌شود. مثال: 6037 1234 5678 9999'),
-                        TextInput::make('agent_deposit_card_name')
-                            ->label('نام صاحب کارت')
-                            ->helperText('مثال: به نام مدیریت پنل'),
+                        Repeater::make('agent_deposit_cards')
+                            ->label('کارت‌های بانکی برای شارژ نمایندگان')
+                            ->addActionLabel('افزودن کارت جدید')
+                            ->reorderable()
+                            ->schema([
+                                TextInput::make('card_number')
+                                    ->label('شماره کارت')
+                                    ->mask('9999-9999-9999-9999')
+                                    ->placeholder('6037-1234-5678-9999')
+                                    ->numeric(false)
+                                    ->required(),
+                                TextInput::make('card_holder')
+                                    ->label('نام صاحب کارت')
+                                    ->placeholder('به نام مدیریت پنل')
+                                    ->required(),
+                            ])
+                            ->columns(2)
+                            ->helperText('در صفحه شارژ کیف پول مینی‌اپ نمایندگی، یکی از کارت‌ها به‌صورت تصادفی نمایش داده می‌شود.'),
                     ]),
             ])
             ->statePath('data');
@@ -107,9 +137,16 @@ class ManageTelegramBotSettings extends Page implements HasForms
             $formData['deposit_amounts'] = json_encode($formData['deposit_amounts']);
         }
 
+        if (isset($formData['agent_deposit_cards'])) {
+            $formData['agent_deposit_cards'] = json_encode($formData['agent_deposit_cards']);
+        }
+
         foreach ($formData as $key => $value) {
             TelegramBotSetting::updateOrCreate(['key' => $key], ['value' => $value ?? '']);
         }
+
+        // Clean up old single-card keys (migrated to agent_deposit_cards Repeater)
+        TelegramBotSetting::whereIn('key', ['agent_deposit_card_number', 'agent_deposit_card_name'])->delete();
 
         Notification::make()->title('تنظیمات با موفقیت ذخیره شد.')->success()->send();
 

@@ -2195,8 +2195,10 @@ class WebhookController extends BaseController
             $user->update(['bot_state' => 'waiting_receipt_' . $orderId]);
         }
 
-        $cardNumber = $this->settings->get('payment_card_number', 'شماره کارتی تنظیم نشده');
-        $cardHolder = $this->settings->get('payment_card_holder_name', 'صاحب حسابی تنظیم نشده');
+        // Pick a random payment card
+        $card = \App\Models\Setting::getRandomPaymentCard();
+        $cardNumber = $card['card_number'];
+        $cardHolder = $card['card_holder'];
         $amountToPay = number_format($order->amount);
 
         $message = "💳 *پرداخت کارت به کارت*\n\n";

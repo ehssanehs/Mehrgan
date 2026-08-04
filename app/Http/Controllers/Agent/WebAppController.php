@@ -534,8 +534,28 @@ class WebAppController extends Controller
         }
 
         $settings = TelegramBotSetting::all()->pluck('value', 'key');
-        $cardNumber = $settings->get('agent_deposit_card_number', '6037 9975 **** ****');
-        $cardName = $settings->get('agent_deposit_card_name', 'به نام مدیریت پنل');
+
+        // Pick a random agent deposit card
+        $cards = $settings->get('agent_deposit_cards');
+        if (is_string($cards)) {
+            $cards = json_decode($cards, true);
+        }
+
+        if (is_array($cards) && count($cards) > 0) {
+            $validCards = array_filter($cards, fn($c) => !empty($c['card_number']));
+            if (count($validCards) > 0) {
+                $random = $validCards[array_rand($validCards)];
+                $cardNumber = $random['card_number'];
+                $cardName = $random['card_holder'] ?? 'به نام مدیریت پنل';
+            } else {
+                $cardNumber = '6037 9975 **** ****';
+                $cardName = 'به نام مدیریت پنل';
+            }
+        } else {
+            // Fallback to old single-card format
+            $cardNumber = $settings->get('agent_deposit_card_number', '6037 9975 **** ****');
+            $cardName = $settings->get('agent_deposit_card_name', 'به نام مدیریت پنل');
+        }
 
         return view('agent.deposit', compact('agent', 'user', 'cardNumber', 'cardName'));
     }
