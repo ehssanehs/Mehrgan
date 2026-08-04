@@ -241,6 +241,18 @@ class ThemeSettings extends Page implements HasForms
                                     ->required(fn (Get $get): bool => $get('force_join_enabled') === true)
                                     ->maxLength(100),
                             ]),
+                        Section::make('دکمه‌های منوی ربات')
+                            ->description('نمایش یا مخفی‌سازی برخی دکمه‌های منوی اصلی ربات تلگرام.')
+                            ->schema([
+                                Toggle::make('tg_show_reseller_button')
+                                    ->label('نمایش دکمه "نمایندگی" در منوی ربات')
+                                    ->helperText('با فعال بودن این گزینه، کاربران می‌توانند از طریق ربات درخواست نمایندگی ثبت کنند.')
+                                    ->default(true),
+                                Toggle::make('tg_show_trial_button')
+                                    ->label('نمایش دکمه "اکانت تست" در منوی ربات')
+                                    ->helperText('با فعال بودن این گزینه، کاربران می‌توانند از طریق ربات اکانت تست دریافت کنند.')
+                                    ->default(true),
+                            ]),
                     ]),
 
                     Tabs\Tab::make('سیستم دعوت از دوستان')

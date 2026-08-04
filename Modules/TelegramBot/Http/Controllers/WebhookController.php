@@ -665,10 +665,28 @@ class WebhookController extends BaseController
                 $this->sendTutorialsMenu($chatId);
                 break;
             case '🧪 اکانت تست':
-                $this->handleTrialRequest($user);
+                if (!filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => $this->escape("⚠️ دریافت اکانت تست در حال حاضر غیرفعال است."),
+                        'parse_mode' => 'MarkdownV2',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
+                } else {
+                    $this->handleTrialRequest($user);
+                }
                 break;
             case '🏢 نمایندگی':
-                $this->handleAgentMenu($user);
+                if (!filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => $this->escape("⚠️ ثبت‌نام نمایندگی در حال حاضر غیرفعال است."),
+                        'parse_mode' => 'MarkdownV2',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
+                } else {
+                    $this->handleAgentMenu($user);
+                }
                 break;
             case '🔐 اطلاعات ورود به سایت':
                 $this->sendSiteCredentials($user);
@@ -4828,7 +4846,9 @@ class WebhookController extends BaseController
 
     protected function getMainMenuKeyboard(): Keyboard
     {
-        return Keyboard::make()->inline()
+        $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+
+        $keyboard = Keyboard::make()->inline()
             ->row([
                 Keyboard::inlineButton(['text' => '🛒 خرید سرویس', 'callback_data' => '/plans']),
                 Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services']),
@@ -4840,11 +4860,16 @@ class WebhookController extends BaseController
             ->row([
                 Keyboard::inlineButton(['text' => '📥 Import Subscription', 'callback_data' => '/import_subscription']),
                 Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
-            ])
-            ->row([
-                Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']),
-                Keyboard::inlineButton(['text' => '🧪 اکانت تست', 'callback_data' => 'trial_request']),
             ]);
+
+        $supportTrialRow = [];
+        $supportTrialRow[] = Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']);
+        if ($showTrial) {
+            $supportTrialRow[] = Keyboard::inlineButton(['text' => '🧪 اکانت تست', 'callback_data' => 'trial_request']);
+        }
+        $keyboard->row($supportTrialRow);
+
+        return $keyboard;
     }
 
     protected function sendOrEditMainMenu($chatId, $text, $messageId = null)
@@ -4868,14 +4893,31 @@ class WebhookController extends BaseController
             $webAppUrl = null;
         }
 
+        // Read toggle settings (default to true/enabled)
+        $showReseller = filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN);
+        $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+
         $keyboard = [
             ['🛒 خرید سرویس', '🛠 سرویس‌های من'],
             ['💰 کیف پول', '📜 تاریخچه تراکنش‌ها'],
             ['💬 پشتیبانی', '🎁 دعوت از دوستان'],
-            ['📚 راهنمای اتصال', '🧪 اکانت تست'],
-            ['📥 Import Existing Subscription'],
-            ['🏢 نمایندگی', '🔐 اطلاعات ورود به سایت'],
         ];
+
+        // Trial button row
+        if ($showTrial) {
+            $keyboard[] = ['📚 راهنمای اتصال', '🧪 اکانت تست'];
+        } else {
+            $keyboard[] = ['📚 راهنمای اتصال'];
+        }
+
+        $keyboard[] = ['📥 Import Existing Subscription'];
+
+        // Reseller row
+        if ($showReseller) {
+            $keyboard[] = ['🏢 نمایندگی', '🔐 اطلاعات ورود به سایت'];
+        } else {
+            $keyboard[] = ['🔐 اطلاعات ورود به سایت'];
+        }
 
         if ($webAppUrl) {
             array_unshift($keyboard, [
