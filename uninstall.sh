@@ -42,19 +42,64 @@ echo -e "${CYAN}║  ${BOLD}حذف نمونه VPNMarket${NC}                    
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo
 
-# --- فهرست نمونه‌های نصب‌شده ---
+# --- توابع مربوط به نمونه‌های نصب‌شده ---
+# نام پوشه در زمان نصب قابل تغییر است؛ بنابراین فقط پوشه‌های vpnmarket-* را
+# جست‌وجو نمی‌کنیم. امضای پروژه و remote گیت مانع نمایش پروژه‌های نامرتبط
+# موجود در /var/www می‌شوند.
+is_vpnmarket_instance() {
+    local dir="$1"
+    local slug app_name
+
+    # حتی نمونه ناقص یا آسیب‌دیده باید در فهرست حذف دیده شود؛ وجود .env و یکی
+    # از نشانه‌های زیر برای شناسایی کافی است و به سالم بودن artisan وابسته نیست.
+    [ -d "$dir" ] && [ -f "$dir/.env" ] || return 1
+
+    slug=$(basename "${dir%/}")
+
+    # نمونه‌های ساخته‌شده توسط نسخه‌های قدیمی اسکریپت
+    if [[ "$slug" == "vpnmarket" || "$slug" == vpnmarket-* ]]; then
+        return 0
+    fi
+
+    # امضای سورس پروژه (برای نمونه‌هایی که نام پوشه سفارشی دارند)
+    if [ -f "$dir/app/Filament/Widgets/VpnMarketInfoWidget.php" ] || \
+       [ -f "$dir/.vpnmarket-instance" ]; then
+        return 0
+    fi
+
+    # git ممکن است به دلیل safe.directory قابل اجرا نباشد؛ config را مستقیم می‌خوانیم.
+    if [ -f "$dir/.git/config" ] && \
+       grep -Eiq 'ehssanehs[/:]vpn-market(\.git)?([[:space:]]|$)' "$dir/.git/config"; then
+        return 0
+    fi
+
+    # سازگاری با نصب‌های قدیمی یا کمینه که فایل امضای بالا را ندارند
+    app_name=$(read_env_value "$dir/.env" "APP_NAME")
+    [[ "${app_name,,}" == vpnmarket* ]]
+}
+
 find_instances() {
-    local instances=()
-    for dir in /var/www/vpnmarket-*/; do
-        if [ -f "${dir}.env" ]; then
-            instances+=("$(basename "$dir")")
+    local dir
+
+    # استفاده از glob عمومی، چون install.sh اجازه انتخاب نام پوشه سفارشی را می‌دهد.
+    # چاپ مستقیم هر نتیجه باعث می‌شود در حالت خالی هیچ خط ساختگی (گزینه «1»)
+    # تولید نشود.
+    for dir in /var/www/*/; do
+        if is_vpnmarket_instance "$dir"; then
+            basename "${dir%/}"
         fi
     done
-    # بررسی پوشه قدیمی
-    if [ -f "/var/www/vpnmarket/.env" ]; then
-        instances+=("vpnmarket")
-    fi
-    printf '%s\n' "${instances[@]}"
+}
+
+read_env_value() {
+    local env_file="$1"
+    local key="$2"
+    local value
+
+    value=$(grep -m1 -E "^[[:space:]]*${key}[[:space:]]*=" "$env_file" 2>/dev/null || true)
+    value=${value#*=}
+    value=$(printf '%s' "$value" | sed -E "s/^[[:space:]\"']+//;s/[[:space:]\"']+$//")
+    printf '%s' "$value"
 }
 
 # --- اگر slug مشخص نشده، به‌صورت تعاملی بپرس ---
@@ -64,9 +109,24 @@ if [ -z "$INSTANCE_SLUG" ]; then
     instances=()
     i=1
     while IFS= read -r slug; do
+        # find_instances در حالت خالی هیچ خطی برنمی‌گرداند؛ برای اطمینان خطوط
+        # خالی احتمالی را نیز به گزینه منو تبدیل نکن.
+        [ -n "$slug" ] || continue
+
         local_path="/var/www/$slug"
-        domain=$(grep -E '^APP_URL=' "${local_path}/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
-        printf "  ${GREEN}%d${NC}) %-25s 🌐 %s\n" "$i" "$slug" "$domain"
+        project_name=$(read_env_value "${local_path}/.env" "APP_NAME")
+        domain=$(read_env_value "${local_path}/.env" "APP_URL")
+        domain=${domain#http://}
+        domain=${domain#https://}
+        domain=${domain%%/*}
+
+        [ -n "$project_name" ] || project_name="نامشخص"
+        [ -n "$domain" ] || domain="نامشخص"
+
+        # نام پوشه را در یک خط مستقل نگه می‌داریم تا ترکیب متن راست‌به‌چپ،
+        # ایموجی و ستون‌بندی printf باعث پنهان یا جابه‌جا دیده شدن آن نشود.
+        printf "  ${GREEN}%d${NC}) ${BOLD}%s${NC}\n" "$i" "$slug"
+        printf "     نام پروژه: %s  |  دامنه: %s\n" "$project_name" "$domain"
         instances+=("$slug")
         i=$((i + 1))
     done < <(find_instances)
@@ -123,9 +183,12 @@ DB_NAME=""
 DB_USER=""
 DOMAIN=""
 if [ -f "$PROJECT_PATH/.env" ]; then
-    DB_NAME=$(grep -E '^DB_DATABASE=' "$PROJECT_PATH/.env" 2>/dev/null | cut -d'=' -f2 | tr -d ' \t\r\n' || echo "")
-    DB_USER=$(grep -E '^DB_USERNAME=' "$PROJECT_PATH/.env" 2>/dev/null | cut -d'=' -f2 | tr -d ' \t\r\n' || echo "")
-    DOMAIN=$(grep -E '^APP_URL=' "$PROJECT_PATH/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "")
+    DB_NAME=$(read_env_value "$PROJECT_PATH/.env" "DB_DATABASE")
+    DB_USER=$(read_env_value "$PROJECT_PATH/.env" "DB_USERNAME")
+    DOMAIN=$(read_env_value "$PROJECT_PATH/.env" "APP_URL")
+    DOMAIN=${DOMAIN#http://}
+    DOMAIN=${DOMAIN#https://}
+    DOMAIN=${DOMAIN%%/*}
 fi
 
 [ -n "$DB_NAME" ]  && echo -e "دیتابیس:     ${YELLOW}${DB_NAME}${NC}"
