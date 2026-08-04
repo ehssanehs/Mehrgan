@@ -4375,7 +4375,7 @@ class WebhookController extends BaseController
             Log::error('Admin approve from Telegram failed: ' . $e->getMessage(), ['order_id' => $orderId]);
             Telegram::sendMessage([
                 'chat_id' => $chatId,
-                'text' => "❌ خطا در تأیید سفارش #{$orderId}: " . $e->getMessage(),
+                'text' => "❌ خطا در تأیید سفارش " . $this->escape("#{$orderId}") . ": " . $this->escape($e->getMessage()),
                 'parse_mode' => 'MarkdownV2',
             ]);
         }
@@ -4426,7 +4426,7 @@ class WebhookController extends BaseController
         $orderType = $order->plan_id ? ($order->renews_order_id ? 'تمدید سرویس' : 'خرید سرویس') : 'شارژ کیف پول';
         Telegram::sendMessage([
             'chat_id' => $chatId,
-            'text' => "📝 *دلیل رد فیش*\n\nسفارش #{$orderId}\nنوع: {$orderType}\n\n" . $this->escape("لطفاً دلیل رد فیش را وارد کنید (این پیام برای کاربر ارسال خواهد شد):"),
+            'text' => "📝 *دلیل رد فیش*\n\nسفارش " . $this->escape("#{$orderId}") . "\nنوع: " . $this->escape($orderType) . "\n\n" . $this->escape("لطفاً دلیل رد فیش را وارد کنید (این پیام برای کاربر ارسال خواهد شد):"),
             'parse_mode' => 'MarkdownV2',
             'reply_markup' => $keyboard,
         ]);
@@ -4509,7 +4509,7 @@ class WebhookController extends BaseController
 
         Telegram::sendMessage([
             'chat_id' => $executorChatId,
-            'text' => "✅ سفارش #{$orderId} رد شد.\n{$deliveryStatus}\n\n📝 دلیل: {$reason}",
+            'text' => "✅ سفارش شماره {$orderId} رد شد.\n{$deliveryStatus}\n\n📝 دلیل: {$reason}",
         ]);
 
         // Edit the original admin notification if we have the message_id in cache
