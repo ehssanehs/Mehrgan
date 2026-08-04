@@ -362,10 +362,10 @@ class OrderResource extends Resource
                                 if($isRenewal) {
                                     $originalOrder->update($dataToUpdate);
                                     $user->update(['show_renewal_notification' => true]);
-                                    $user->notifications()->create(['type'=>'renew','title'=>'تمدید شد','message'=>"تمدید {$plan->name}",'link'=>route('dashboard')]);
+                                    $user->notifications()->create(['type'=>'renew','title'=>'تمدید شد','message'=>"تمدید {$plan->name}",'link'=>$finalConfig]);
                                 } else {
                                     $order->update($dataToUpdate);
-                                    $user->notifications()->create(['type'=>'activate','title'=>'فعال شد','message'=>"خرید {$plan->name}",'link'=>route('dashboard')]);
+                                    $user->notifications()->create(['type'=>'activate','title'=>'فعال شد','message'=>"خرید {$plan->name}",'link'=>$finalConfig]);
                                 }
 
                                 $order->update([
