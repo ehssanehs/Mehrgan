@@ -4,7 +4,7 @@
             <div class="flex-1">
 
                 <a
-                    href="https://github.com/ehssanehs/VPNMarket"
+                    href="https://github.com/ehssanehs/vpn-market"
                     rel="noopener noreferrer"
                     target="_blank"
                     class="block text-xl font-bold text-gray-950 dark:text-white"
@@ -22,7 +22,7 @@
 
                 <x-filament::link
                     color="gray"
-                    href="https://github.com/ehssanehs/VPNMarket"
+                    href="https://github.com/ehssanehs/vpn-market"
                     icon-alias="panels::widgets.filament-info.open-github-button"
                     rel="noopener noreferrer"
                     target="_blank"

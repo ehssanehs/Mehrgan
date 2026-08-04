@@ -3,7 +3,7 @@
 # ==================================================================================
 # === اسکریپت نصب نهایی، هوشمند و ضد خطا برای پروژه VPNMarket روی Ubuntu 22.04 ===
 # === نویسنده: Arvin Vahed                                                       ===
-# === https://github.com/ehssanehs/VPNMarket                                    ===
+# === https://github.com/ehssanehs/vpn-market                                    ===
 # ==================================================================================
 
 set -e
@@ -16,7 +16,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 PROJECT_PATH="/var/www/vpnmarket"
-GITHUB_REPO="https://github.com/ehssanehs/VPNMarket.git"
+GITHUB_REPO="https://github.com/ehssanehs/vpn-market.git"
 PHP_VERSION="8.3"
 
 echo -e "${CYAN}--- شروع نصب پروژه VPNMarket ---${NC}"
