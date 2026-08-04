@@ -711,7 +711,15 @@ class WebhookController extends BaseController
             return;
         }
 
-        $this->startPurchaseProcess($user, $planId, $username);
+        $locationId = null;
+        if ($user->bot_state && Str::contains($user->bot_state, 'selected_loc:')) {
+            preg_match('/selected_loc:(\d+)/', $user->bot_state, $matches);
+            if (!empty($matches[1])) {
+                $locationId = (int) $matches[1];
+            }
+        }
+
+        $this->startPurchaseProcess($user, $planId, $username, null, $locationId);
     }
 
     protected function promptForUsername(User $user, int $planId, ?int $messageId = null, ?int $locationId = null)
@@ -719,7 +727,7 @@ class WebhookController extends BaseController
         // If sequential naming is enabled, auto-generate and skip prompt
         if (\App\Services\ClientNamingService::isEnabled()) {
             $generated = \App\Services\ClientNamingService::generate($user->id, null);
-            $this->startPurchaseProcess($user, $planId, $generated, $messageId);
+            $this->startPurchaseProcess($user, $planId, $generated, $messageId, $locationId);
             return;
         }
 
@@ -1614,7 +1622,17 @@ class WebhookController extends BaseController
                     $fileName = $this->savePhotoAttachment($update, 'receipts');
                     if (!$fileName) throw new \Exception("Failed to save photo attachment.");
 
-                    $order->update(['card_payment_receipt' => $fileName]);
+                    $updateData = [
+                        'card_payment_receipt' => $fileName,
+                        'payment_method' => 'card',
+                    ];
+                    if (!$order->server_id) {
+                        $serverId = $this->resolveBestServerId($order->plan);
+                        if ($serverId) {
+                            $updateData['server_id'] = $serverId;
+                        }
+                    }
+                    $order->update($updateData);
                     $user->update(['bot_state' => null]);
 
                     Telegram::sendMessage([
@@ -1658,7 +1676,52 @@ class WebhookController extends BaseController
     // 🛒 سیستم خرید و تخفیف
     // ========================================================================
 
-    protected function startPurchaseProcess($user, $planId, $username, $messageId = null)
+    protected function resolveBestServerId(?Plan $plan = null, ?int $locationId = null): ?int
+    {
+        if (!class_exists('Modules\MultiServer\Models\Server')) {
+            return null;
+        }
+
+        $serverType = $plan ? ($plan->server_type ?? 'all') : 'all';
+
+        if ($locationId) {
+            $query = \Modules\MultiServer\Models\Server::where('location_id', $locationId)
+                ->where('is_active', true)
+                ->whereRaw('current_users < capacity');
+
+            if ($serverType !== 'all') {
+                $query->where('type', $serverType);
+            }
+
+            $bestServer = $query->orderBy('current_users', 'asc')->first();
+            if ($bestServer) {
+                return $bestServer->id;
+            }
+        }
+
+        $fallbackQuery = \Modules\MultiServer\Models\Server::where('is_active', true)
+            ->whereRaw('current_users < capacity');
+        if ($serverType !== 'all') {
+            $fallbackQuery->where('type', $serverType);
+        }
+        $bestServer = $fallbackQuery->orderBy('current_users', 'asc')->first();
+        if ($bestServer) {
+            return $bestServer->id;
+        }
+
+        $bestServer = \Modules\MultiServer\Models\Server::where('is_active', true)
+            ->whereRaw('current_users < capacity')
+            ->orderBy('current_users', 'asc')
+            ->first();
+        if ($bestServer) {
+            return $bestServer->id;
+        }
+
+        $bestServer = \Modules\MultiServer\Models\Server::where('is_active', true)->first();
+        return $bestServer ? $bestServer->id : null;
+    }
+
+    protected function startPurchaseProcess($user, $planId, $username, $messageId = null, $locationId = null)
     {
         $plan = Plan::find($planId);
         if (!$plan) {
@@ -1666,74 +1729,23 @@ class WebhookController extends BaseController
             return;
         }
 
-        $serverId = null;
-        $isMultiLocationEnabled = filter_var(
-            $this->settings->get('enable_multilocation', false),
-            FILTER_VALIDATE_BOOLEAN
-        );
-
-        if ($user->bot_state && Str::contains($user->bot_state, 'selected_loc:')) {
+        if (!$locationId && $user->bot_state && Str::contains($user->bot_state, 'selected_loc:')) {
             preg_match('/selected_loc:(\d+)/', $user->bot_state, $matches);
             if (!empty($matches[1])) {
                 $locationId = (int) $matches[1];
-            } else {
-                $locationId = null;
             }
+        }
 
-            if ($locationId) {
-                $serverType = $plan->server_type ?? 'all';
+        $serverId = $this->resolveBestServerId($plan, $locationId);
 
-                // پیدا کردن خلوت‌ترین سرور فعال با توجه به نوع پلن
-                $query = \Modules\MultiServer\Models\Server::where('location_id', $locationId)
-                    ->where('is_active', true)
-                    ->whereRaw('current_users < capacity');
-                
-                if ($serverType !== 'all') {
-                    $query->where('type', $serverType);
-                }
-
-                $bestServer = $query->orderBy('current_users', 'asc')->first();
-
-                if ($bestServer) {
-                    $serverId = $bestServer->id;
-                } else {
-                    // اگر در لوکیشن انتخابی سروری نبود، سعی کن از هر لوکیشنی یک سرور مناسب پیدا کنی
-                    $fallbackQuery = \Modules\MultiServer\Models\Server::where('is_active', true)
-                        ->whereRaw('current_users < capacity');
-                    if ($serverType !== 'all') {
-                        $fallbackQuery->where('type', $serverType);
-                    }
-                    $fallbackServer = $fallbackQuery->orderBy('current_users', 'asc')->first();
-                    
-                    if ($fallbackServer) {
-                        $serverId = $fallbackServer->id;
-                    } else {
-                        $user->update(['bot_state' => null]);
-                        Telegram::sendMessage([
-                            'chat_id' => $user->telegram_chat_id,
-                            'text' => $this->escape("❌ متأسفانه ظرفیت تمام سرورها تکمیل شده است."),
-                            'parse_mode' => 'MarkdownV2'
-                        ]);
-                        return;
-                    }
-                }
-            } else {
-                // اگر لوکیشن انتخاب نشده بود (مثلاً state پاک شده)، سعی کن بهترین سرور را پیدا کنی
-                $serverType = $plan->server_type ?? 'all';
-                $fallbackQuery = \Modules\MultiServer\Models\Server::where('is_active', true)
-                    ->whereRaw('current_users < capacity');
-                if ($serverType !== 'all') {
-                    $fallbackQuery->where('type', $serverType);
-                }
-                $fallbackServer = $fallbackQuery->orderBy('current_users', 'asc')->first();
-
-                if ($fallbackServer) {
-                    $serverId = $fallbackServer->id;
-                } else {
-                    $this->sendOrEditMainMenu($user->telegram_chat_id, "❌ لطفاً ابتدا لوکیشن را انتخاب کنید.", $messageId);
-                    return;
-                }
-            }
+        if (!$serverId && class_exists('Modules\MultiServer\Models\Server') && \Modules\MultiServer\Models\Server::where('is_active', true)->exists()) {
+            $user->update(['bot_state' => null]);
+            Telegram::sendMessage([
+                'chat_id' => $user->telegram_chat_id,
+                'text' => $this->escape("❌ متأسفانه ظرفیت تمام سرورها تکمیل شده است."),
+                'parse_mode' => 'MarkdownV2'
+            ]);
+            return;
         }
 
         $order = $user->orders()->create([
@@ -1887,6 +1899,9 @@ class WebhookController extends BaseController
                     }
 
                     $plan = $order->plan;
+                    if (!$order->server_id) {
+                        $order->update(['server_id' => $this->resolveBestServerId($plan)]);
+                    }
                 } else {
                     $planId = $input;
                     $plan = Plan::find($planId);
@@ -1898,6 +1913,7 @@ class WebhookController extends BaseController
                     // ساخت سفارش داخل تراکنش
                     $order = $lockedUser->orders()->create([
                         'plan_id' => $plan->id,
+                        'server_id' => $this->resolveBestServerId($plan),
                         'status' => 'pending',
                         'source' => 'telegram',
                         'amount' => $plan->price,
@@ -1918,6 +1934,7 @@ class WebhookController extends BaseController
                 $order->update([
                     'status' => 'paid',
                     'payment_method' => 'wallet',
+                    'server_id' => $order->server_id ?: $this->resolveBestServerId($plan),
                     'expires_at' => now()->addDays($plan->duration_days)
                 ]);
 
@@ -2065,42 +2082,37 @@ class WebhookController extends BaseController
     protected function sendCardPaymentInfo($chatId, $orderId, $messageId)
     {
         $order = Order::find($orderId);
-        if (!$order->server_id) {
+        if (!$order) {
+            return;
+        }
 
-            $user = $order->user;
-            if ($user->bot_state && Str::contains($user->bot_state, 'selected_loc:')) {
-                preg_match('/selected_loc:(\d+)/', $user->bot_state, $matches);
-                if (!empty($matches[1])) {
-                    $locationId = (int) $matches[1];
-
-                    if (class_exists('Modules\MultiServer\Models\Server')) {
-                        // ✅ اصلاح: فیلتر کردن بر اساس نوع سرور پلن
-                        $plan = $order->plan;
-                        $serverType = $plan ? ($plan->server_type ?? 'all') : 'all';
-
-                        $query = \Modules\MultiServer\Models\Server::where('location_id', $locationId)
-                            ->where('is_active', true)
-                            ->whereRaw('current_users < capacity');
-                        
-                        if ($serverType !== 'all') {
-                            $query->where('type', $serverType);
-                        }
-
-                        $bestServer = $query->orderBy('current_users', 'asc')->first();
-
-                        if ($bestServer) {
-                            $order->update(['server_id' => $bestServer->id]);
-                            Log::info("Fixed missing server_id for order #{$order->id} with server #{$bestServer->id} ({$bestServer->type})");
-                        }
-                    }
-                }
+        $locationId = null;
+        $user = $order->user;
+        if ($user && $user->bot_state && Str::contains($user->bot_state, 'selected_loc:')) {
+            preg_match('/selected_loc:(\d+)/', $user->bot_state, $matches);
+            if (!empty($matches[1])) {
+                $locationId = (int) $matches[1];
             }
         }
 
+        $updateData = [
+            'payment_method' => 'card',
+        ];
+
+        if (!$order->server_id) {
+            $serverId = $this->resolveBestServerId($order->plan, $locationId);
+            if ($serverId) {
+                $updateData['server_id'] = $serverId;
+                Log::info("Fixed missing server_id for order #{$order->id} with server #{$serverId}");
+            }
+        }
+
+        $order->update($updateData);
+
         $user = $order->user;
-        $user->update(['bot_state' => 'waiting_receipt_' . $orderId]);
-        $user = $order->user;
-        $user->update(['bot_state' => 'waiting_receipt_' . $orderId]);
+        if ($user) {
+            $user->update(['bot_state' => 'waiting_receipt_' . $orderId]);
+        }
 
         $cardNumber = $this->settings->get('payment_card_number', 'شماره کارتی تنظیم نشده');
         $cardHolder = $this->settings->get('payment_card_holder_name', 'صاحب حسابی تنظیم نشده');
@@ -2708,20 +2720,16 @@ class WebhookController extends BaseController
         $inboundId = (int) $settings->get('xui_default_inbound_id');
 
         // بررسی مولتی سرور
-        if ($isMultiLocationEnabled && class_exists('Modules\MultiServer\Models\Server')) {
+        if (class_exists('Modules\MultiServer\Models\Server')) {
             // اگر روی سفارش سرور مشخص نیست، یک سرور فعال انتخاب کن
             if (!$order->server_id) {
-                $targetServer = \Modules\MultiServer\Models\Server::where('is_active', true)
-                    ->whereRaw('current_users < capacity')
-                    ->first()
-                    ?: \Modules\MultiServer\Models\Server::where('is_active', true)->first();
-                if ($targetServer) {
-                    $order->server_id = $targetServer->id;
+                $targetServerId = $this->resolveBestServerId($plan);
+                if ($targetServerId) {
+                    $order->server_id = $targetServerId;
                     try { $order->save(); } catch (\Exception $e) {}
                 }
-            } else {
-                $targetServer = \Modules\MultiServer\Models\Server::find($order->server_id);
             }
+            $targetServer = $order->server_id ? \Modules\MultiServer\Models\Server::find($order->server_id) : null;
             if ($targetServer && $targetServer->is_active) {
                 $isMultiServer = true;
                 $panelType = $targetServer->type ?? 'xui';
@@ -3041,7 +3049,7 @@ class WebhookController extends BaseController
         }
 
         $order = $user->orders()->create([
-            'plan_id' => null, 'status' => 'pending', 'source' => 'telegram_deposit', 'amount' => $amount
+            'plan_id' => null, 'status' => 'pending', 'source' => 'telegram_deposit', 'amount' => $amount, 'payment_method' => 'card'
         ]);
         $user->update(['bot_state' => null]);
         $this->sendCardPaymentInfo($user->telegram_chat_id, $order->id, $messageId);
@@ -3137,8 +3145,8 @@ class WebhookController extends BaseController
 
                 $newRenewalOrder = $user->orders()->create([
                     'plan_id' => $plan->id,
+                    'server_id' => $originalOrder->server_id ?: $this->resolveBestServerId($plan),
                     'status' => 'paid',
-
                     'source' => 'telegram_renewal',
                     'amount' => $plan->price,
                     'expires_at' => null,
@@ -3269,12 +3277,13 @@ class WebhookController extends BaseController
 
         $newRenewalOrder = $user->orders()->create([
             'plan_id' => $plan->id,
-            'server_id' => $originalOrder->server_id,
+            'server_id' => $originalOrder->server_id ?: $this->resolveBestServerId($plan),
             'status' => 'pending',
             'source' => 'telegram_renewal',
             'amount' => $plan->price,
             'expires_at' => null,
             'panel_username' => $originalOrder->panel_username,
+            'payment_method' => 'card',
         ]);
 
         $newRenewalOrder->renews_order_id = $originalOrder->id;
@@ -3317,19 +3326,15 @@ class WebhookController extends BaseController
         $inboundId = (int) $settings->get('xui_default_inbound_id');
 
         // بررسی مولتی سرور
-        if ($isMultiLocationEnabled && class_exists('Modules\MultiServer\Models\Server')) {
+        if (class_exists('Modules\MultiServer\Models\Server')) {
             if (!$originalOrder->server_id) {
-                $targetServer = \Modules\MultiServer\Models\Server::where('is_active', true)
-                    ->whereRaw('current_users < capacity')
-                    ->first()
-                    ?: \Modules\MultiServer\Models\Server::where('is_active', true)->first();
-                if ($targetServer) {
-                    $originalOrder->server_id = $targetServer->id;
+                $targetServerId = $this->resolveBestServerId($plan);
+                if ($targetServerId) {
+                    $originalOrder->server_id = $targetServerId;
                     try { $originalOrder->save(); } catch (\Exception $e) {}
                 }
-            } else {
-                $targetServer = \Modules\MultiServer\Models\Server::find($originalOrder->server_id);
             }
+            $targetServer = $originalOrder->server_id ? \Modules\MultiServer\Models\Server::find($originalOrder->server_id) : null;
             if ($targetServer && $targetServer->is_active) {
                 $isMultiServer = true;
                 $panelType = $targetServer->type ?? 'xui';

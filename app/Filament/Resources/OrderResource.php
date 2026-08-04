@@ -81,7 +81,10 @@ class OrderResource extends Resource
 
                             // --- 1. شارژ کیف پول ---
                             if (!$plan) {
-                                $order->update(['status' => 'paid']);
+                                $order->update([
+                                    'status' => 'paid',
+                                    'payment_method' => $order->payment_method ?: 'card',
+                                ]);
                                 $user->increment('balance', $order->amount);
                                 Transaction::create(['user_id' => $user->id, 'order_id' => $order->id, 'amount' => $order->amount, 'type' => 'deposit', 'status' => 'completed', 'description' => "شارژ کیف پول (تایید دستی فیش)"]);
                                 $user->notifications()->create(['type' => 'wallet_charged_approved', 'title' => 'کیف پول شارژ شد', 'message' => "مبلغ " . number_format($order->amount) . " تومان اضافه شد.", 'link' => route('dashboard', ['tab' => 'order_history'])]);
@@ -137,14 +140,16 @@ class OrderResource extends Resource
                             }
 
                             // 🚨 اصلاح برای سفارشات بدون سرور (مثلاً کارت به کارت): انتخاب سرور پیش‌فرض
-                            if (!$targetServerId && $isMultiLocationEnabled && class_exists('Modules\MultiServer\Models\Server')) {
+                            if (!$targetServerId && class_exists('Modules\MultiServer\Models\Server')) {
                                 $defaultServer = \Modules\MultiServer\Models\Server::where('is_active', true)
                                     ->whereRaw('current_users < capacity')
-                                    ->first();
+                                    ->first()
+                                    ?: \Modules\MultiServer\Models\Server::where('is_active', true)->first();
                                 if ($defaultServer) {
                                     $targetServerId = $defaultServer->id;
                                     // سرور انتخاب شده را روی سفارش ذخیره می‌کنیم
                                     $order->server_id = $targetServerId;
+                                    $order->save();
                                     // اگر تمدید باشد، باید روی سفارش اصلی هم ذخیره شود؟ خیر، چون این سفارش جدید است
                                     Log::info("Default Server Selected for Order", ['order_id' => $order->id, 'server_id' => $targetServerId]);
                                 }
@@ -362,7 +367,10 @@ class OrderResource extends Resource
                                     $user->notifications()->create(['type'=>'activate','title'=>'فعال شد','message'=>"خرید {$plan->name}",'link'=>route('dashboard')]);
                                 }
 
-                                $order->update(['status' => 'paid']);
+                                $order->update([
+                                    'status' => 'paid',
+                                    'payment_method' => $order->payment_method ?: 'card',
+                                ]);
                                 $description = ($isRenewal ? "تمدید سرویس" : "خرید سرویس") . " {$plan->name}";
                                 Transaction::create(['user_id'=>$user->id, 'order_id'=>$order->id, 'amount'=>$plan->price, 'type'=>'purchase', 'status'=>'completed', 'description'=>$description]);
 
