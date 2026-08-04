@@ -90,6 +90,7 @@ class MarzbanService
             $proxies = $userData['proxies'] ?? [];
             if (empty($proxies)) {
                 $proxies = [
+                    'shadowsocks' => new \stdClass(),
                     'vless' => new \stdClass(),
                     'vmess' => new \stdClass(),
                 ];
