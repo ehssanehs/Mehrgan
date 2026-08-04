@@ -3,6 +3,8 @@
 # ==============================================================================
 # ===              اسکریپت آپدیت هوشمند و امن پروژه VPNMarket                ===
 # ==============================================================================
+# با هر بار اجرای این اسکریپت، آخرین تغییرات از مخزن گیت‌هاب دریافت شده
+# و تمام مراحل آپدیت (وابستگی‌ها، دیتابیس، کش و ...) انجام می‌شود.
 
 set -e # توقف اسکریپت در صورت بروز هرگونه خطا
 
@@ -29,10 +31,17 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+# تشخیص برنچ فعلی
+CURRENT_BRANCH=$(sudo git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+if [ -z "$CURRENT_BRANCH" ] || [ "$CURRENT_BRANCH" = "HEAD" ]; then
+    CURRENT_BRANCH="main"
+fi
+echo -e "برنچ فعال: ${GREEN}${CURRENT_BRANCH}${NC}"
+
 echo
 
 # --- مرحله ۱: آماده‌سازی محیط و حالت تعمیر ---
-echo -e "${YELLOW}مرحله ۱ از ۷: آماده‌سازی محیط و فعال‌سازی حالت تعمیر...${NC}"
+echo -e "${YELLOW}مرحله ۱ از ۸: آماده‌سازی محیط و فعال‌سازی حالت تعمیر...${NC}"
 
 # --->>> تغییر کلیدی: حل مشکل دسترسی npm در ابتدای کار <<<---
 echo "ایجاد و تنظیم دسترسی پوشه کش NPM..."
@@ -44,43 +53,76 @@ sudo cp .env .env.bak.$(date +%Y-%m-%d_%H-%M-%S)
 echo "یک نسخه پشتیبان از فایل .env شما در همین مسیر ساخته شد."
 
 # فعال‌سازی حالت تعمیر
-sudo -u $WEB_USER php artisan down || true
+sudo -u $WEB_USER php artisan down --retry=60 || true
 
 # --- مرحله ۲: دریافت آخرین کدها از گیت‌هاب ---
-echo -e "${YELLOW}مرحله ۲ از ۷: دریافت آخرین تغییرات از گیت‌هاب...${NC}"
-sudo git fetch origin
-sudo git reset --hard origin/main
+echo -e "${YELLOW}مرحله ۲ از ۸: دریافت آخرین تغییرات از گیت‌هاب (برنچ ${CURRENT_BRANCH})...${NC}"
+
+# ذخیره تغییرات محلی احتمالی (stash) و دریافت آخرین نسخه
+sudo git fetch origin --prune
+if sudo git diff --quiet && sudo git diff --cached --quiet; then
+    # مخزن تمیز است — مستقیماً pull کن
+    sudo git reset --hard "origin/${CURRENT_BRANCH}"
+else
+    # تغییرات محلی وجود دارد — stash بعد pull
+    echo -e "${YELLOW}تغییرات محلی شناسایی شد. stash و سپس pull انجام می‌شود...${NC}"
+    sudo git stash
+    sudo git reset --hard "origin/${CURRENT_BRANCH}"
+fi
+
+COMMIT_HASH=$(sudo git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+echo -e "نسخه فعلی: ${GREEN}${COMMIT_HASH}${NC}"
 
 # --- مرحله ۳: تنظیم دسترسی‌های صحیح فایل‌ها ---
-echo -e "${YELLOW}مرحله ۳ از ۷: تنظیم مجدد دسترسی‌های فایل...${NC}"
+echo -e "${YELLOW}مرحله ۳ از ۸: تنظیم مجدد دسترسی‌های فایل...${NC}"
 sudo chown -R $WEB_USER:$WEB_USER .
 sudo chmod -R 775 storage bootstrap/cache
+sudo chmod -R 775 database
 
 # --- مرحله ۴: آپدیت وابستگی‌های PHP (Composer) ---
-echo -e "${YELLOW}مرحله ۴ از ۷: به‌روزرسانی پکیج‌های PHP...${NC}"
-sudo -u $WEB_USER composer install --no-dev --optimize-autoloader
+echo -e "${YELLOW}مرحله ۴ از ۸: به‌روزرسانی پکیج‌های PHP...${NC}"
+sudo -u $WEB_USER composer install --no-dev --optimize-autoloader --no-interaction
 
 # --- مرحله ۵: آپدیت وابستگی‌های Frontend (NPM) ---
-echo -e "${YELLOW}مرحله ۵ از ۷: به‌روزرسانی پکیج‌های Node.js و کامپایل assets...${NC}"
-# --->>> تغییر کلیدی: اجرای npm با پوشه خانگی صحیح <<<---
-sudo -u $WEB_USER HOME=/var/www npm install
+echo -e "${YELLOW}مرحله ۵ از ۸: به‌روزرسانی پکیج‌های Node.js و کامپایل assets...${NC}"
+sudo -u $WEB_USER HOME=/var/www npm install --no-audit --no-fund
 sudo -u $WEB_USER HOME=/var/www npm run build
 echo "فایل‌های JS/CSS برای محیط Production کامپایل شدند."
 
-# --- مرحله ۶: آپدیت دیتابیس و ری‌استارت سرویس‌ها ---
-echo -e "${YELLOW}مرحله ۶ از ۷: آپدیت دیتابیس و ری‌استارت سرویس‌ها...${NC}"
+# --- مرحله ۶: سم‌لینک storage و آپدیت دیتابیس ---
+echo -e "${YELLOW}مرحله ۶ از ۸: سم‌لینک storage، آپدیت دیتابیس و ری‌استارت سرویس‌ها...${NC}"
+
+# اطمینان از وجود symlink برای storage
+sudo -u $WEB_USER php artisan storage:link 2>/dev/null || true
+
+# اجرای migration ها
 sudo -u $WEB_USER php artisan migrate --force
+
 # ری‌استارت کردن worker های صف برای بارگذاری کد جدید
-sudo supervisorctl restart vpnmarket-worker:*
+if command -v supervisorctl &> /dev/null; then
+    sudo supervisorctl restart vpnmarket-worker:* 2>/dev/null || echo "هشدار: ری‌استارت ورکرهای صف ناموفق بود."
+fi
 echo "سرویس‌های صف (Queue) با موفقیت ری‌استارت شدند."
 
-# --- مرحله ۷: پاکسازی کش‌ها و خروج از حالت تعمیر ---
-echo -e "${YELLOW}مرحله ۷ از ۷: پاکسازی کش‌ها و فعال‌سازی مجدد سایت...${NC}"
-# این دستور تمام کش‌ها را به صورت امن پاک می‌کند
+# --- مرحله ۷: بهینه‌سازی و کش‌گذاری برای Production ---
+echo -e "${YELLOW}مرحله ۷ از ۸: بهینه‌سازی و کش‌گذاری برای Production...${NC}"
+
+# پاکسازی اولیه کش‌ها
 sudo -u $WEB_USER php artisan optimize:clear
+
+# ایجاد کش‌های جدید برای Production
+sudo -u $WEB_USER php artisan config:cache
+sudo -u $WEB_USER php artisan route:cache
+sudo -u $WEB_USER php artisan view:cache
+sudo -u $WEB_USER php artisan event:cache
+
+# --- مرحله ۸: خروج از حالت تعمیر و تأیید نهایی ---
+echo -e "${YELLOW}مرحله ۸ از ۸: فعال‌سازی مجدد سایت...${NC}"
 sudo -u $WEB_USER php artisan up
 
 echo
 echo -e "${GREEN}=====================================================${NC}"
 echo -e "${GREEN}✅ پروژه با موفقیت به آخرین نسخه آپدیت شد!${NC}"
+echo -e "${GREEN}   برنچ: ${CURRENT_BRANCH} | کامیت: ${COMMIT_HASH}${NC}"
+echo -e "${GREEN}   تاریخ: $(date '+%Y-%m-%d %H:%M:%S')${NC}"
 echo -e "${GREEN}=====================================================${NC}"

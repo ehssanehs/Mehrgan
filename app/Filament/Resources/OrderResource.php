@@ -12,6 +12,7 @@ use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
 use App\Services\XUIService;
 use Filament\Forms;
+use Filament\Forms\Components\Textarea as FormTextarea;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -42,7 +43,7 @@ class OrderResource extends Resource
             ->schema([
                 Forms\Components\Select::make('user_id')->relationship('user', 'name')->label('کاربر')->disabled(),
                 Forms\Components\Select::make('plan_id')->relationship('plan', 'name')->label('پلن')->disabled(),
-                Forms\Components\Select::make('status')->label('وضعیت سفارش')->options(['pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده'])->required(),
+                Forms\Components\Select::make('status')->label('وضعیت سفارش')->options(['pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده', 'rejected' => 'رد شده'])->required(),
                 Forms\Components\Textarea::make('config_details')->label('اطلاعات کانفیگ سرویس')->rows(10),
             ]);
     }
@@ -59,13 +60,13 @@ class OrderResource extends Resource
                     return '';
                 })->color(fn(Order $record) => $record->renews_order_id ? 'primary' : 'gray'),
                 IconColumn::make('source')->label('منبع')->icon(fn (?string $state): string => match ($state) { 'web' => 'heroicon-o-globe-alt', 'telegram' => 'heroicon-o-paper-airplane', default => 'heroicon-o-question-mark-circle' })->color(fn (?string $state): string => match ($state) { 'web' => 'primary', 'telegram' => 'info', default => 'gray' }),
-                Tables\Columns\TextColumn::make('status')->label('وضعیت')->badge()->color(fn (string $state): string => match ($state) { 'pending' => 'warning', 'paid' => 'success', 'expired' => 'danger', default => 'gray' })->formatStateUsing(fn (string $state): string => match ($state) { 'pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده', default => $state }),
+                Tables\Columns\TextColumn::make('status')->label('وضعیت')->badge()->color(fn (string $state): string => match ($state) { 'pending' => 'warning', 'paid' => 'success', 'expired' => 'danger', 'rejected' => 'danger', default => 'gray' })->formatStateUsing(fn (string $state): string => match ($state) { 'pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده', 'rejected' => 'رد شده', default => $state }),
                 Tables\Columns\TextColumn::make('created_at')->label('تاریخ سفارش')->dateTime('Y-m-d')->sortable(),
                 Tables\Columns\TextColumn::make('expires_at')->label('تاریخ انقضا')->dateTime('Y-m-d')->sortable(),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
-                Tables\Filters\SelectFilter::make('status')->label('وضعیت')->options(['pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده']),
+                Tables\Filters\SelectFilter::make('status')->label('وضعیت')->options(['pending' => 'در انتظار پرداخت', 'paid' => 'پرداخت شده', 'expired' => 'منقضی شده', 'rejected' => 'رد شده']),
                 Tables\Filters\SelectFilter::make('source')->label('منبع')->options(['web' => 'وب‌سایت', 'telegram' => 'تلگرام']),
             ])
             ->actions([
@@ -476,9 +477,212 @@ class OrderResource extends Resource
                             }
                         });
                     }),
+                Action::make('reject')
+                    ->label('رد فیش و غیرفعال‌سازی')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->visible(fn (Order $order): bool => in_array($order->status, ['pending', 'paid']))
+                    ->form([
+                        FormTextarea::make('rejection_reason')
+                            ->label('دلیل رد')
+                            ->placeholder('دلیل رد فیش پرداخت را وارد کنید...')
+                            ->required()
+                            ->rows(3),
+                    ])
+                    ->action(function (Order $order, array $data) {
+                        $reason = $data['rejection_reason'];
+                        $settings = Setting::all()->pluck('value', 'key');
+                        $user = $order->user;
+
+                        // If order was paid (VPN account exists), disable it on the panel
+                        if ($order->status === 'paid' && $order->plan_id && $order->panel_username) {
+                            try {
+                                $this->disableVpnAccount($order, $settings);
+                            } catch (\Exception $e) {
+                                Log::error('Failed to disable VPN account on reject', [
+                                    'order_id' => $order->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                                // Continue anyway — still mark as rejected
+                            }
+                        }
+
+                        // Mark order as rejected
+                        $order->update([
+                            'status' => 'rejected',
+                            'payment_method' => $order->payment_method ?: 'card',
+                        ]);
+
+                        // Notify user via Telegram
+                        if ($user && $user->telegram_chat_id) {
+                            try {
+                                $escape = function ($text) {
+                                    $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
+                                    return str_replace($chars, array_map(fn($c) => '\\' . $c, $chars), $text);
+                                };
+
+                                $msg = "❌ *پرداخت شما تایید نشد*\\n\\n";
+                                if ($order->plan_id) {
+                                    $planName = $order->plan?->name ?? 'نامشخص';
+                                    $msg .= "📦 پلن: " . $escape($planName) . "\\n";
+                                    if ($order->renews_order_id) {
+                                        $msg .= "🔄 نوع: تمدید سرویس\\n";
+                                    }
+                                    $msg .= "\\n⚠️ *سرویس شما غیرفعال شد\\.*\\n";
+                                }
+                                $msg .= "\\n📝 *دلیل:* " . $escape($reason) . "\\n\\n";
+                                $msg .= $escape("در صورت نیاز به توضیحات بیشتر، تیکت پشتیبانی ثبت کنید.");
+
+                                $keyboard = Keyboard::make()->inline()
+                                    ->row([
+                                        Keyboard::inlineButton(['text' => '📝 ایجاد تیکت', 'callback_data' => '/support_new']),
+                                        Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start']),
+                                    ]);
+
+                                Telegram::setAccessToken($settings->get('telegram_bot_token'));
+                                Telegram::sendMessage([
+                                    'chat_id' => $user->telegram_chat_id,
+                                    'text' => $msg,
+                                    'parse_mode' => 'MarkdownV2',
+                                    'reply_markup' => $keyboard,
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('Failed to send rejection Telegram message', [
+                                    'order_id' => $order->id,
+                                    'error' => $e->getMessage(),
+                                ]);
+                            }
+                        }
+
+                        Notification::make()
+                            ->title('سفارش رد شد و سرویس غیرفعال گردید.')
+                            ->success()
+                            ->send();
+                    })
+                    ->requiresConfirmation()
+                    ->modalHeading('رد فیش پرداخت')
+                    ->modalDescription('با این کار سرویس کاربر غیرفعال شده و سفارش رد می‌شود. دلیل را وارد کنید.')
+                    ->modalIcon('heroicon-o-x-circle'),
                 Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([Tables\Actions\BulkActionGroup::make([Tables\Actions\DeleteBulkAction::make()])]);
+    }
+
+    /**
+     * Disable a VPN account on the panel (X-UI or Marzban).
+     */
+    protected static function disableVpnAccount(Order $order, $settings): void
+    {
+        $panelType = $settings->get('panel_type');
+        $targetServer = null;
+
+        // Determine server and panel type
+        $targetServerId = $order->server_id;
+        if ($order->renews_order_id && !$targetServerId) {
+            $originalOrder = Order::find($order->renews_order_id);
+            if ($originalOrder) {
+                $targetServerId = $originalOrder->server_id;
+            }
+        }
+
+        if ($targetServerId && class_exists('Modules\\MultiServer\\Models\\Server')) {
+            $targetServer = \Modules\MultiServer\Models\Server::find($targetServerId);
+        }
+
+        if ($targetServer && $targetServer->is_active) {
+            $panelType = strtolower($targetServer->type ?? 'xui');
+            if ($panelType === 'sanaei') $panelType = 'xui';
+        }
+
+        $username = $order->panel_username;
+
+        if (empty($username)) {
+            Log::warning('Cannot disable VPN account: no panel_username', ['order_id' => $order->id]);
+            return;
+        }
+
+        if ($panelType === 'marzban') {
+            $marzbanHost = $targetServer ? $targetServer->full_host : $settings->get('marzban_host');
+            $marzbanUser = $targetServer ? $targetServer->username : $settings->get('marzban_sudo_username');
+            $marzbanPass = $targetServer ? $targetServer->password : $settings->get('marzban_sudo_password');
+            $marzbanNode = $targetServer ? ($targetServer->marzban_node_hostname ?? $marzbanHost) : $settings->get('marzban_node_hostname');
+
+            $marzban = new MarzbanService(
+                (string) ($marzbanHost ?? ''),
+                (string) ($marzbanUser ?? ''),
+                (string) ($marzbanPass ?? ''),
+                (string) ($marzbanNode ?? '')
+            );
+
+            $result = $marzban->disableUser($username);
+            Log::info('Marzban user disabled', ['username' => $username, 'result' => $result]);
+
+        } elseif ($panelType === 'xui') {
+            $xuiHost = $targetServer ? $targetServer->full_host : $settings->get('xui_host');
+            $xuiUser = $targetServer ? $targetServer->username : $settings->get('xui_user');
+            $xuiPass = $targetServer ? $targetServer->password : $settings->get('xui_pass');
+            $inboundId = $targetServer ? $targetServer->inbound_id : (int) $settings->get('xui_default_inbound_id');
+
+            $xui = new XUIService($xuiHost, $xuiUser, $xuiPass);
+            if (!$xui->login()) {
+                Log::error('XUI login failed during account disable', ['order_id' => $order->id]);
+                return;
+            }
+
+            // Find the client
+            $inboundData = null;
+            if ($targetServer) {
+                $inbounds = $xui->getInbounds();
+                foreach ($inbounds as $i) {
+                    if ($i['id'] == $inboundId) {
+                        $inboundData = $i;
+                        break;
+                    }
+                }
+            } else {
+                $im = Inbound::whereJsonContains('inbound_data->id', (int) $inboundId)->first();
+                if ($im) {
+                    $inboundData = is_string($im->inbound_data) ? json_decode($im->inbound_data, true) : $im->inbound_data;
+                }
+            }
+
+            if (!$inboundData) {
+                Log::error('Inbound not found for account disable', ['order_id' => $order->id]);
+                return;
+            }
+
+            $clients = $xui->getClients($inboundData['id']);
+            $client = collect($clients)->first(function ($c) use ($username) {
+                return strtolower(trim($c['email'] ?? '')) === strtolower(trim($username));
+            });
+
+            if ($client) {
+                $clientUuid = $client['id'] ?? '';
+                $clientSubId = $client['subId'] ?? Str::random(16);
+                $result = $xui->disableClient(
+                    $inboundData['id'],
+                    $username,
+                    0, // not used by the method
+                    $clientUuid,
+                    $clientSubId
+                );
+                Log::info('XUI client disabled', [
+                    'email' => $username,
+                    'inbound_id' => $inboundData['id'],
+                    'result' => $result,
+                ]);
+
+                // Decrement current_users on server
+                if ($targetServer) {
+                    $targetServer->decrement('current_users');
+                }
+            } else {
+                Log::warning('XUI client not found for disable', [
+                    'email' => $username,
+                    'inbound_id' => $inboundData['id'],
+                ]);
+            }
+        }
     }
 
     public static function getRelations(): array { return []; }

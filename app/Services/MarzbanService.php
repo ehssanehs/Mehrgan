@@ -382,4 +382,32 @@ class MarzbanService
 
         return $base . $subscriptionUrl;
     }
+
+    /**
+     * Disable a user by setting expiry to now and data_limit to 0.
+     */
+    public function disableUser(string $username): ?array
+    {
+        if (!$this->accessToken) {
+            if (!$this->login()) return null;
+        }
+
+        try {
+            $payload = [
+                'expire' => now()->timestamp,
+                'data_limit' => 0,
+                'data_limit_reset_strategy' => 'no_reset',
+            ];
+
+            $response = Http::withToken($this->accessToken)
+                ->withHeaders(['Accept' => 'application/json'])
+                ->put($this->baseUrl . "/api/user/{$username}", $payload);
+
+            Log::info('Marzban Disable User Response:', $response->json() ?? ['raw' => $response->body()]);
+            return $response->json();
+        } catch (\Exception $e) {
+            Log::error('Marzban Disable User Exception:', ['message' => $e->getMessage()]);
+            return null;
+        }
+    }
 }

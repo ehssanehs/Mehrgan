@@ -361,7 +361,7 @@ class XUIService
                 'email' => $clientData['email'],
                 'totalGB' => $clientData['total'] ?? 0,
                 'expiryTime' => $clientData['expiryTime'] ?? 0,
-                'enable' => true,
+                'enable' => $clientData['enable'] ?? true,
                 'tgId' => '',
                 'subId' => $subId,
                 'limitIp' => 0,
@@ -401,6 +401,67 @@ class XUIService
                 'trace' => $e->getTraceAsString()
             ]);
             return ['success' => false, 'msg' => 'Error updating client: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * Disable a client by setting enable=false and expiryTime to now.
+     */
+    public function disableClient(int $inboundId, string $email, int $clientIdNum, string $clientUuid, ?string $subId = null): ?array
+    {
+        if (!$this->login()) {
+            return ['success' => false, 'msg' => 'Authentication failed.'];
+        }
+
+        try {
+            $subId = $subId ?? Str::random(16);
+
+            $clientSettings = [
+                'id' => $clientUuid,
+                'email' => $email,
+                'totalGB' => 0,
+                'expiryTime' => now()->timestamp * 1000,
+                'enable' => false,
+                'tgId' => '',
+                'subId' => $subId,
+                'limitIp' => 0,
+                'flow' => '',
+            ];
+
+            $settings = json_encode(['clients' => [$clientSettings]]);
+
+            $updateClientUrl = $this->baseUrl . $this->basePath . "/panel/api/inbounds/updateClient/{$clientUuid}";
+
+            Log::info('Disabling XUI client', [
+                'url' => $updateClientUrl,
+                'inbound_id' => $inboundId,
+                'client_uuid' => $clientUuid,
+                'email' => $email,
+            ]);
+
+            $response = $this->getClient()->asForm()->post($updateClientUrl, [
+                'id' => $inboundId,
+                'settings' => $settings,
+            ]);
+
+            $responseData = $response->json();
+
+            Log::info('XUI disableClient response', [
+                'status' => $response->status(),
+                'success' => $responseData['success'] ?? false,
+                'msg' => $responseData['msg'] ?? 'N/A',
+            ]);
+
+            return $responseData;
+
+        } catch (\Exception $e) {
+            Log::error('Exception in XUI disableClient', [
+                'message' => $e->getMessage(),
+                'inbound_id' => $inboundId,
+                'email' => $email,
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return ['success' => false, 'msg' => 'Error disabling client: ' . $e->getMessage()];
         }
     }
 

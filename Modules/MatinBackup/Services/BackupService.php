@@ -106,9 +106,9 @@ class BackupService
         try {
             $settings = Setting::all()->pluck('value', 'key');
             $botToken = $settings->get('telegram_bot_token');
-            $chatId = $settings->get('telegram_admin_chat_id');
+            $chatIds = getTelegramAdminChatIds($settings);
 
-            if (!$botToken || !$chatId) {
+            if (!$botToken || empty($chatIds)) {
                 Log::warning('Telegram bot token or Admin Chat ID not set for backup sending.');
                 return false;
             }
@@ -122,15 +122,19 @@ class BackupService
                 return false;
             }
 
-            Telegram::sendDocument([
-                'chat_id' => $chatId,
-                'document' => \Telegram\Bot\FileUpload\InputFile::create($filePath, $filename),
-                'caption' => "📦 *بکاپ جدید سایت*\n\n📅 تاریخ: " . now()->format('Y-m-d H:i:s'),
-                'parse_mode' => 'Markdown',
-            ]);
+            $sent = false;
+            foreach ($chatIds as $chatId) {
+                Telegram::sendDocument([
+                    'chat_id' => $chatId,
+                    'document' => \Telegram\Bot\FileUpload\InputFile::create($filePath, $filename),
+                    'caption' => "📦 *بکاپ جدید سایت*\n\n📅 تاریخ: " . now()->format('Y-m-d H:i:s'),
+                    'parse_mode' => 'Markdown',
+                ]);
+                $sent = true;
+            }
 
             Log::info("Backup sent to Telegram successfully: $filename");
-            return true;
+            return $sent;
 
         } catch (\Exception $e) {
             Log::error("Failed to send backup to Telegram: " . $e->getMessage());
