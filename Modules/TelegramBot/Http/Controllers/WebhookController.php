@@ -107,81 +107,17 @@ class WebhookController extends BaseController
             return null;
         }
 
-        // Telegram Web Apps require a valid domain name with SSL; IP addresses are rejected by Telegram.
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+        if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
             return null;
         }
 
-        if (in_array($host, ['localhost'], true) || !str_contains($host, '.')) {
+        // Private/reserved IP addresses cannot be opened by Telegram clients.
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false
+            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
             return null;
         }
 
         return $url;
-    }
-
-    /**
-     * Send a message accompanied by the persistent reply main menu keyboard.
-     * Safely falls back if Telegram rejects the optional Mini App button or
-     * Markdown formatting.
-     */
-    protected function sendMessageWithReplyKeyboard(int $chatId, string $text, bool $useMarkdown = false): void
-    {
-        $payload = [
-            'chat_id' => $chatId,
-            'text' => $text,
-            'reply_markup' => $this->getReplyMainMenu($chatId, true),
-        ];
-
-        if ($useMarkdown) {
-            $payload['parse_mode'] = 'MarkdownV2';
-        }
-
-        try {
-            Telegram::sendMessage($payload);
-            return;
-        } catch (\Throwable $exception) {
-            Log::warning('Failed to send message with full reply keyboard; retrying without Mini App web_app button.', [
-                'chat_id' => $chatId,
-                'error' => $exception->getMessage(),
-            ]);
-        }
-
-        // 1. Retry with reply keyboard WITHOUT optional Mini App button
-        $payload['reply_markup'] = $this->getReplyMainMenu($chatId, false);
-        try {
-            Telegram::sendMessage($payload);
-            return;
-        } catch (\Throwable $fallbackException) {
-            Log::error('Failed to send message with plain reply keyboard.', [
-                'chat_id' => $chatId,
-                'error' => $fallbackException->getMessage(),
-            ]);
-        }
-
-        // 2. If parse_mode caused the failure, retry without MarkdownV2
-        if (isset($payload['parse_mode'])) {
-            unset($payload['parse_mode']);
-            try {
-                Telegram::sendMessage($payload);
-                return;
-            } catch (\Throwable $plainException) {
-                Log::error('Failed to send message without parse_mode.', [
-                    'chat_id' => $chatId,
-                    'error' => $plainException->getMessage(),
-                ]);
-            }
-        }
-
-        // 3. Final retry without reply_markup so the user still gets a response
-        unset($payload['reply_markup']);
-        try {
-            Telegram::sendMessage($payload);
-        } catch (\Throwable $finalException) {
-            Log::critical('Failed to send fallback message.', [
-                'chat_id' => $chatId,
-                'error' => $finalException->getMessage(),
-            ]);
-        }
     }
 
     /**
@@ -191,7 +127,34 @@ class WebhookController extends BaseController
      */
     protected function sendWelcomeMessage(int $chatId, string $welcomeMessage): void
     {
-        $this->sendMessageWithReplyKeyboard($chatId, $welcomeMessage, false);
+        try {
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $welcomeMessage,
+                'reply_markup' => $this->getReplyMainMenu($chatId),
+            ]);
+
+            return;
+        } catch (\Throwable $exception) {
+            Log::error('Failed to send Telegram welcome message with keyboard.', [
+                'chat_id' => $chatId,
+                'error' => $exception->getMessage(),
+            ]);
+        }
+
+        // Retry without the optional keyboard so the user still receives a
+        // response and can use /start again after the configuration is fixed.
+        try {
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $welcomeMessage,
+            ]);
+        } catch (\Throwable $fallbackException) {
+            Log::critical('Failed to send Telegram welcome message.', [
+                'chat_id' => $chatId,
+                'error' => $fallbackException->getMessage(),
+            ]);
+        }
     }
 
     public function sendBroadcastMessage(string $chatId, string $message): bool
@@ -545,7 +508,12 @@ class WebhookController extends BaseController
             $message .= $this->escape($reseller->status === 'banned' ? "نمایندگی شما مسدود شده است." : "نمایندگی شما غیرفعال شده است.");
             $message .= "\n" . $this->escape("لطفاً با پشتیبانی تماس بگیرید.");
 
-            $this->sendMessageWithReplyKeyboard($chatId, $message, true);
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $message,
+                    'parse_mode' => 'MarkdownV2',
+                    'reply_markup' => $this->getReplyMainMenu($chatId)
+                ]);
         }
         
         // بستن if مربوط به بررسی درخواست
@@ -829,14 +797,24 @@ class WebhookController extends BaseController
                 break;
             case '🧪 اکانت تست':
                 if (!filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
-                    $this->sendMessageWithReplyKeyboard($chatId, $this->escape("⚠️ دریافت اکانت تست در حال حاضر غیرفعال است."), true);
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => $this->escape("⚠️ دریافت اکانت تست در حال حاضر غیرفعال است."),
+                        'parse_mode' => 'MarkdownV2',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
                 } else {
                     $this->handleTrialRequest($user);
                 }
                 break;
             case '🏢 نمایندگی':
                 if (!filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
-                    $this->sendMessageWithReplyKeyboard($chatId, $this->escape("⚠️ ثبت‌نام نمایندگی در حال حاضر غیرفعال است."), true);
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => $this->escape("⚠️ ثبت‌نام نمایندگی در حال حاضر غیرفعال است."),
+                        'parse_mode' => 'MarkdownV2',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
                 } else {
                     $this->handleAgentMenu($user);
                 }
@@ -1368,17 +1346,6 @@ class WebhookController extends BaseController
                 case '/import_subscription':
                     $this->showImportPrompt($user, $messageId);
                     break;
-                case '/agent':
-                case '/reseller':
-                    if (!filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
-                        $this->sendMessageWithReplyKeyboard($chatId, '⚠️ ثبت‌نام نمایندگی در حال حاضر غیرفعال است.', false);
-                    } else {
-                        $this->handleAgentMenu($user);
-                    }
-                    break;
-                case '/site_credentials':
-                    $this->sendSiteCredentials($user, $messageId);
-                    break;
                 case '/plans': $this->sendPlans($chatId, $messageId); break;
                 case '/my_services': $this->sendMyServices($user, $messageId); break;
                 case '/wallet': $this->sendWalletMenu($user, $messageId); break;
@@ -1398,7 +1365,11 @@ class WebhookController extends BaseController
                             'show_alert' => false
                         ]);
                         try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
-                        $this->sendMessageWithReplyKeyboard($chatId, 'خوش آمدید! حالا می‌توانید از ربات استفاده کنید.', false);
+                        Telegram::sendMessage([
+                            'chat_id' => $chatId,
+                            'text' => 'خوش آمدید! حالا می‌توانید از ربات استفاده کنید.',
+                            'reply_markup' => $this->getReplyMainMenu($chatId)
+                        ]);
                     } else {
                         Telegram::answerCallbackQuery([
                             'callback_query_id' => $callbackQuery->getId(),
@@ -1415,11 +1386,19 @@ class WebhookController extends BaseController
                 case '/cancel_action':
                     $user->update(['bot_state' => null]);
                     try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
-                    $this->sendMessageWithReplyKeyboard($chatId, '✅ عملیات لغو شد.', false);
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => '✅ عملیات لغو شد.',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
                     break;
                 default:
                     Log::warning('Unknown callback data received:', ['data' => $data, 'chat_id' => $chatId]);
-                    $this->sendMessageWithReplyKeyboard($chatId, 'دستور نامعتبر.', false);
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => 'دستور نامعتبر.',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
                     break;
             }
         }
@@ -5022,7 +5001,6 @@ class WebhookController extends BaseController
     protected function getMainMenuKeyboard(): Keyboard
     {
         $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
-        $showReseller = filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $keyboard = Keyboard::make()->inline()
             ->row([
@@ -5045,13 +5023,6 @@ class WebhookController extends BaseController
         }
         $keyboard->row($supportTrialRow);
 
-        $resellerRow = [];
-        if ($showReseller) {
-            $resellerRow[] = Keyboard::inlineButton(['text' => '🏢 نمایندگی', 'callback_data' => '/reseller']);
-        }
-        $resellerRow[] = Keyboard::inlineButton(['text' => '🔐 اطلاعات ورود به سایت', 'callback_data' => '/site_credentials']);
-        $keyboard->row($resellerRow);
-
         return $keyboard;
     }
 
@@ -5060,11 +5031,11 @@ class WebhookController extends BaseController
         $this->sendOrEditMessage($chatId, $this->escape($text), $this->getMainMenuKeyboard(), $messageId);
     }
 
-    protected function getReplyMainMenu($chatId = null, bool $includeWebApp = true): Keyboard
+    protected function getReplyMainMenu($chatId = null): Keyboard
     {
-        $webAppUrl = $includeWebApp ? $this->getPublicWebAppUrl() : null;
+        $webAppUrl = $this->getPublicWebAppUrl();
 
-        if ($includeWebApp && !$webAppUrl && config('app.url')) {
+        if (!$webAppUrl && config('app.url')) {
             Log::notice('Skipping Telegram Mini App button because APP_URL is not a public HTTPS URL.', [
                 'app_url' => config('app.url'),
             ]);
@@ -5108,8 +5079,7 @@ class WebhookController extends BaseController
         return Keyboard::make([
             'keyboard' => $keyboard,
             'resize_keyboard' => true,
-            'one_time_keyboard' => false,
-            'is_persistent' => true,
+            'one_time_keyboard' => false
         ]);
     }
 }
