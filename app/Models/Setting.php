@@ -24,14 +24,41 @@ class Setting extends Model
     ];
 
     protected $casts = [
-        'value' => 'array',
         'test_account_enabled' => 'boolean',
         'test_account_volume_gb' => 'integer',
         'test_account_days' => 'integer',
         'test_account_max_per_user' => 'integer',
     ];
 
+    /**
+     * Decode a setting value that is expected to contain a JSON array.
+     *
+     * Settings are stored in a generic text column. Some older broken saves may
+     * have double-encoded array values (for example: "\"[{...}]\""). Decode a
+     * couple of layers so admin repeaters can still load and re-save them.
+     */
+    public static function decodeArrayValue(mixed $value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
 
+        if ($value === null || $value === '') {
+            return [];
+        }
+
+        if (! is_string($value)) {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+
+        for ($i = 0; $i < 2 && is_string($decoded); $i++) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        return is_array($decoded) ? $decoded : [];
+    }
 
     public function inbounds()
     {
@@ -56,9 +83,11 @@ class Setting extends Model
         // New format: payment_cards is a JSON array of {card_number, card_holder}
         $cards = $settings->get('payment_cards');
 
-        if (is_array($cards) && count($cards) > 0) {
+        $cards = static::decodeArrayValue($cards);
+
+        if (count($cards) > 0) {
             // Filter out empty entries
-            $validCards = array_filter($cards, fn($c) => !empty($c['card_number']));
+            $validCards = array_values(array_filter($cards, fn($c) => is_array($c) && !empty($c['card_number'])));
             if (count($validCards) > 0) {
                 $random = $validCards[array_rand($validCards)];
                 return [
@@ -89,8 +118,10 @@ class Setting extends Model
 
         $cards = $settings->get('payment_cards');
 
-        if (is_array($cards) && count($cards) > 0) {
-            return array_filter($cards, fn($c) => !empty($c['card_number']));
+        $cards = static::decodeArrayValue($cards);
+
+        if (count($cards) > 0) {
+            return array_values(array_filter($cards, fn($c) => is_array($c) && !empty($c['card_number'])));
         }
 
         // Fallback: old single-card format
