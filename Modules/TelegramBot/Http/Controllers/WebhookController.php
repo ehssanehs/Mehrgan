@@ -3571,7 +3571,10 @@ class WebhookController extends BaseController
                     $adminChatIds = getTelegramAdminChatIds($this->settings);
                     if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
                         Telegram::setAccessToken($botToken);
-                        $adminMsg = "🧾 *تیکت جدید از ربات تلگرام*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*موضوع:* " . $this->escape($ticket->subject) . "\n\n*متن پیام:*\n" . $this->escape($messageText);
+                        $adminMsg = "🧾 *" . $this->escape("تیکت جدید از ربات تلگرام") . "*\n\n";
+                        $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
+                        $adminMsg .= "*موضوع:* " . $this->escape($ticket->subject) . "\n\n";
+                        $adminMsg .= "*متن پیام:*\n" . $this->escape($messageText);
                         foreach ($adminChatIds as $adminChatId) {
                             if ($adminChatId) {
                                 Telegram::sendMessage([
@@ -3622,7 +3625,9 @@ class WebhookController extends BaseController
                     $adminChatIds = getTelegramAdminChatIds($this->settings);
                     if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
                         Telegram::setAccessToken($botToken);
-                        $adminMsg = "💬 *پاسخ جدید به تیکت #{$ticket->id}*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*متن پاسخ:*\n" . $this->escape($messageText);
+                        $adminMsg = "💬 *پاسخ جدید به تیکت " . $this->escape("#{$ticket->id}") . "*\n\n";
+                        $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
+                        $adminMsg .= "*متن پاسخ:*\n" . $this->escape($messageText);
                         foreach ($adminChatIds as $adminChatId) {
                             if ($adminChatId) {
                                 Telegram::sendMessage([
