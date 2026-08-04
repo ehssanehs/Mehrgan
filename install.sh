@@ -16,7 +16,7 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 PROJECT_PATH="/var/www/vpnmarket"
-GITHUB_REPO="https://github.com/arvinvahed/VPNMarket.git"
+GITHUB_REPO="https://github.com/ehssanehs/VPNMarket.git"
 PHP_VERSION="8.3"
 
 echo -e "${CYAN}--- شروع نصب پروژه VPNMarket ---${NC}"
