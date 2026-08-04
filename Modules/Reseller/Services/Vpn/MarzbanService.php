@@ -61,16 +61,23 @@ class MarzbanService implements VpnServiceInterface
             // "proxies": { "vless": {}, "vmess": {}, ... } -> enable protocols for user
             // "inbounds": { "vless": ["tag1"], ... } -> map protocols to specific inbounds
             
-            $protocol = strtolower($product->protocol);
+            $protocol = strtolower($product->protocol ?? '');
             $proxies = [];
             $inbounds = [];
             
-            // Enable the protocol
-            $proxies[$protocol] = new \stdClass(); // Empty object
-            
-            // Assign tags to the protocol
-            if (!empty($inboundTags)) {
-                $inbounds[$protocol] = $inboundTags;
+            if (!empty($protocol)) {
+                // Enable the protocol
+                $proxies[$protocol] = new \stdClass(); // Empty object
+                
+                // Assign tags to the protocol
+                if (!empty($inboundTags)) {
+                    $inbounds[$protocol] = $inboundTags;
+                }
+            } else {
+                // Default to vless and vmess if empty
+                $proxies['vless'] = new \stdClass();
+                $proxies['vmess'] = new \stdClass();
+                $inbounds = new \stdClass();
             }
             
             // If the user wants other protocols enabled by default, they should be in server config?
