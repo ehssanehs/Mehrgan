@@ -142,16 +142,11 @@ class WebhookController extends BaseController
             $text .= "اکنون حساب نمایندگی شما فعال شده و می‌توانید از طریق پنل نمایندگی، سرور و اکانت برای مشتریان خود بسازید.\n\n";
             $text .= "برای ورود به پنل نمایندگی، روی دکمه زیر بزنید:";
 
-            $webAppUrl = route('webapp.agent.dashboard', ['user_id' => $chatId]);
-            if (str_starts_with($webAppUrl, 'http://')) {
-                $webAppUrl = str_replace('http://', 'https://', $webAppUrl);
-            }
-
             $keyboard = Keyboard::make()->inline()
                 ->row([
                     Keyboard::inlineButton([
-                        'text' => '🚀 ورود به پنل نمایندگی (Mini App)',
-                        'web_app' => ['url' => $webAppUrl],
+                        'text' => '🏢 ورود به پنل نمایندگی',
+                        'callback_data' => 'agent_check_status',
                     ]),
                 ])
                 ->row([
@@ -404,24 +399,6 @@ class WebhookController extends BaseController
         }
     }
 
-    protected function getSecureWebAppUrl(string $path): string
-    {
-        // می‌گیره: /agent/register
-        // برمی‌گردونه: https://xxx.ngrok-free.app/agent/register
-
-        $url = config('app.url') . $path;
-
-        // اجبار به HTTPS
-        if (str_starts_with($url, 'http://')) {
-            $url = 'https://' . substr($url, 7);
-        }
-
-        // حذف اسلش اضافی
-        $url = rtrim($url, '/');
-
-        return $url;
-    }
-
 
     /**
      * 📝 نمایش فرم ثبت نام نمایندگی
@@ -430,7 +407,6 @@ class WebhookController extends BaseController
     {
         $chatId = $user->telegram_chat_id;
 
-        // ✅ خواندن قیمت از جدول reseller_plans
         $agentPlan = \Modules\Reseller\Models\ResellerPlan::where('type', 'quota')
             ->where('is_active', true)
             ->first();
@@ -444,21 +420,13 @@ class WebhookController extends BaseController
         $message .= "✅ " . $this->escape("سرور اختصاصی خریداری کنید") . "\n";
         $message .= "✅ " . $this->escape("از تعرفه ویژه نمایندگان استفاده کنید") . "\n\n";
         $message .= "💰 *هزینه ثبت‌نام: " . $this->escape(number_format($registrationFee) . " تومان") . "*\n";
-        $message .= "📱 " . $this->escape("برای ثبت درخواست، مینی‌اپ را باز کنید:");
-
-        $webAppUrl = route('webapp.agent.register', ['user_id' => $chatId]);
-        $webAppUrl = str_replace('http://', 'https://', $webAppUrl);
-
-        Log::info('Agent WebApp URL generated', [
-            'url' => $webAppUrl,
-            'registration_fee' => $registrationFee,
-            'max_accounts' => $maxAccounts,
-        ]);
+        $message .= $this->escape("برای ثبت درخواست نمایندگی لطفاً با پشتیبانی تماس بگیرید.") . "\n";
+        $message .= $this->escape("پس از پرداخت هزینه ثبت‌نام، رسید را برای پشتیبانی ارسال کنید.");
 
         $keyboard = Keyboard::make()->inline()
             ->row([Keyboard::inlineButton([
-                'text' => '📱 ورود به مینی‌اپ نمایندگی',
-                'web_app' => ['url' => $webAppUrl]
+                'text' => '📝 ایجاد تیکت پشتیبانی',
+                'callback_data' => '/support_menu'
             ])])
             ->row([Keyboard::inlineButton([
                 'text' => '⬅️ بازگشت',
@@ -479,7 +447,6 @@ class WebhookController extends BaseController
     {
         $chatId = $user->telegram_chat_id;
 
-
         $agentAccountPlan = \Modules\Reseller\Models\ResellerPlan::where('type', 'pay_as_you_go')
             ->where('is_active', true)
             ->first();
@@ -495,24 +462,16 @@ class WebhookController extends BaseController
         $message .= "💰 موجودی: *" . $this->escape($balance . " تومان") . "*\n";
         $message .= "📊 وضعیت اکانت‌ها: *" . $this->escape("{$createdCount} / {$maxCount}") . "*\n";
         $message .= "💸 قیمت هر اکانت: *" . $this->escape(number_format($accountPrice) . " تومان") . "*\n\n";
-        $message .= "👇 " . $this->escape("برای مدیریت کامل روی دکمه زیر کلیک کنید:");
+        $message .= $this->escape("از دکمه‌های زیر برای مدیریت استفاده کنید:");
 
-
-
-        $webAppUrl = route('webapp.agent.dashboard', ['user_id' => $chatId]);
-
-        if (str_starts_with($webAppUrl, 'http://')) {
-            $webAppUrl = str_replace('http://', 'https://', $webAppUrl);
-        }
-
-
-        // ✅ ساخت دکمه با قابلیت web_app
         $keyboard = Keyboard::make()->inline()
             ->row([
-                Keyboard::inlineButton([
-                    'text' => '🚀 ورود به پنل نمایندگی (Mini App)',
-                    'web_app' => ['url' => $webAppUrl] // این خط باعث باز شدن مینی‌اپ می‌شود
-                ])
+                Keyboard::inlineButton(['text' => '💰 شارژ کیف پول', 'callback_data' => 'agent_deposit']),
+                Keyboard::inlineButton(['text' => '➕ ساخت اکانت', 'callback_data' => 'agent_create_account'])
+            ])
+            ->row([
+                Keyboard::inlineButton(['text' => '📊 گزارشات', 'callback_data' => 'agent_reports']),
+                Keyboard::inlineButton(['text' => '🖥 خرید سرور', 'callback_data' => 'agent_buy_server'])
             ])
             ->row([
                 Keyboard::inlineButton(['text' => '🏠 بازگشت به منوی اصلی', 'callback_data' => '/start'])
@@ -520,7 +479,7 @@ class WebhookController extends BaseController
 
         Telegram::sendMessage([
             'chat_id' => $chatId,
-            'text' => $this->escape($message),
+            'text' => $message,
             'parse_mode' => 'MarkdownV2',
             'reply_markup' => $keyboard
         ]);
@@ -1307,7 +1266,7 @@ class WebhookController extends BaseController
                 break;
 
             case 'agent_deposit':
-                // شارژ کیف پول
+                // شارژ کیف پول - بدون Mini App
                 if (!$reseller || $reseller->status !== 'active') {
                     Telegram::sendMessage([
                         'chat_id' => $chatId,
@@ -1317,26 +1276,26 @@ class WebhookController extends BaseController
                     return;
                 }
 
-                try {
-                    $webAppUrl = route('webapp.agent.deposit');
-                } catch (\Exception $e) {
-                    $webAppUrl = config('app.url') . '/agent/deposit';
-                }
+                $walletBalance = $reseller->wallet ? $reseller->wallet->balance : 0;
+                $message = "💰 *شارژ کیف پول نمایندگی*\n\n";
+                $message .= "💳 موجودی فعلی: *" . $this->escape(number_format($walletBalance) . " تومان") . "*\n\n";
+                $message .= $this->escape("برای شارژ کیف پول نمایندگی لطفاً با پشتیبانی تماس بگیرید و موضوع شارژ نمایندگی را مطرح کنید.") . "\n";
+                $message .= $this->escape("پس از تایید پرداخت توسط ادمین، موجودی شما افزایش خواهد یافت.");
 
                 $keyboard = Keyboard::make()->inline()
-                    ->row([Keyboard::inlineButton(['text' => '💳 ورود به صفحه شارژ', 'web_app' => ['url' => $webAppUrl]])])
+                    ->row([Keyboard::inlineButton(['text' => '📝 تماس با پشتیبانی', 'callback_data' => '/support_menu'])])
                     ->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت', 'callback_data' => 'agent_back_to_dashboard'])]);
 
                 Telegram::sendMessage([
                     'chat_id' => $chatId,
-                    'text' => $this->escape('💰 شارژ کیف پول نمایندگی\n\nاز طریق لینک زیر اقدام کنید:'),
+                    'text' => $message,
                     'parse_mode' => 'MarkdownV2',
                     'reply_markup' => $keyboard
                 ]);
                 break;
 
             case 'agent_buy_server':
-                // خرید سرور
+                // خرید سرور - بدون Mini App
                 if (!$reseller || $reseller->status !== 'active') {
                     Telegram::sendMessage([
                         'chat_id' => $chatId,
@@ -1346,27 +1305,22 @@ class WebhookController extends BaseController
                     return;
                 }
 
-                try {
-                    $webAppUrl = route('webapp.agent.buy-server');
-                } catch (\Exception $e) {
-                    $webAppUrl = config('app.url') . '/agent/buy-server';
-                }
-
+                $walletBalance = $reseller->wallet ? $reseller->wallet->balance : 0;
                 $message = "🖥 *خرید سرور اختصاصی*\n\n";
-                $message .= "موجودی فعلی: " . number_format($reseller->wallet ? $reseller->wallet->balance : 0) . " تومان\n\n";
-                $message .= "پلن‌های موجود:\n";
-                $message .= "• سرور ۱۰۰ نفره: ۵۰۰,۰۰۰ تومان\n";
-                $message .= "• سرور ۲۰۰ نفره: ۹۰۰,۰۰۰ تومان\n";
-                $message .= "• سرور ۵۰۰ نفره: ۲,۰۰۰,۰۰۰ تومان\n\n";
-                $message .= "برای خرید وارد لینک زیر شوید:";
+                $message .= "💰 موجودی فعلی: *" . $this->escape(number_format($walletBalance) . " تومان") . "*\n\n";
+                $message .= $this->escape("پلن‌های موجود:") . "\n";
+                $message .= "• " . $this->escape("سرور ۱۰۰ نفره: ۵۰۰,۰۰۰ تومان") . "\n";
+                $message .= "• " . $this->escape("سرور ۲۰۰ نفره: ۹۰۰,۰۰۰ تومان") . "\n";
+                $message .= "• " . $this->escape("سرور ۵۰۰ نفره: ۲,۰۰۰,۰۰۰ تومان") . "\n\n";
+                $message .= $this->escape("برای خرید سرور لطفاً با پشتیبانی تماس بگیرید.");
 
                 $keyboard = Keyboard::make()->inline()
-                    ->row([Keyboard::inlineButton(['text' => '🖥 ورود به صفحه خرید سرور', 'web_app' => ['url' => $webAppUrl]])])
+                    ->row([Keyboard::inlineButton(['text' => '📝 تماس با پشتیبانی', 'callback_data' => '/support_menu'])])
                     ->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت', 'callback_data' => 'agent_back_to_dashboard'])]);
 
                 Telegram::sendMessage([
                     'chat_id' => $chatId,
-                    'text' => $this->escape($message),
+                    'text' => $message,
                     'parse_mode' => 'MarkdownV2',
                     'reply_markup' => $keyboard
                 ]);
@@ -4881,21 +4835,7 @@ class WebhookController extends BaseController
 
     protected function getReplyMainMenu($chatId = null): Keyboard
     {
-        try {
-            // ✅ استفاده از آدرس اصلی سایت به جای پنل نمایندگی
-            $webAppUrl = config('app.url');
-            $webAppUrl = trim($webAppUrl);
-
-            // اطمینان از HTTPS بودن لینک
-            if (str_starts_with($webAppUrl, 'http://')) {
-                $webAppUrl = str_replace('http://', 'https://', $webAppUrl);
-            }
-        } catch (\Exception $e) {
-            Log::warning('App URL not found', ['error' => $e->getMessage()]);
-            $webAppUrl = null;
-        }
-
-        // Read toggle settings (default to true/enabled)
+        // Mini App feature removed
         $showReseller = filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN);
         $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
 
@@ -4905,7 +4845,6 @@ class WebhookController extends BaseController
             ['💬 پشتیبانی', '🎁 دعوت از دوستان'],
         ];
 
-        // Trial button row
         if ($showTrial) {
             $keyboard[] = ['📚 راهنمای اتصال', '🧪 اکانت تست'];
         } else {
@@ -4914,17 +4853,10 @@ class WebhookController extends BaseController
 
         $keyboard[] = ['📥 Import Existing Subscription'];
 
-        // Reseller row
         if ($showReseller) {
             $keyboard[] = ['🏢 نمایندگی', '🔐 اطلاعات ورود به سایت'];
         } else {
             $keyboard[] = ['🔐 اطلاعات ورود به سایت'];
-        }
-
-        if ($webAppUrl) {
-            array_unshift($keyboard, [
-                ['text' => '📱 مدیریت حساب (Mini App)', 'web_app' => ['url' => $webAppUrl]]
-            ]);
         }
 
         return Keyboard::make([
