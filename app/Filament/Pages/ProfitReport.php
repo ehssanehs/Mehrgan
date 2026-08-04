@@ -10,7 +10,6 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Number;
 
 class ProfitReport extends Page implements HasForms
 {
@@ -47,14 +46,14 @@ class ProfitReport extends Page implements HasForms
                     ->label('از تاریخ')
                     ->default(now()->startOfMonth())
                     ->maxDate(now())
-                    ->jalali()
+                    ->displayFormat('Y/m/d')
                     ->closeOnDateSelection()
                     ->required(),
                 DatePicker::make('date_to')
                     ->label('تا تاریخ')
                     ->default(now())
                     ->maxDate(now())
-                    ->jalali()
+                    ->displayFormat('Y/m/d')
                     ->closeOnDateSelection()
                     ->afterOrEqual('date_from')
                     ->required(),
