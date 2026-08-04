@@ -3468,7 +3468,7 @@ class WebhookController extends BaseController
                     default => '⚪️ نامشخص',
                 };
                 $ticketIdEscaped = $this->escape((string)$ticket->id);
-                $message .= "\n📌 *تیکت \\#{$ticketIdEscaped}* | " . $this->escape($status) . "\n";
+                $message .= "\n📌 *تیکت \\#{$ticketIdEscaped}* " . $this->escape(" | ") . $this->escape($status) . "\n";
                 $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
                 $message .= "_{$this->escape($ticket->updated_at->diffForHumans())}_";
             }
@@ -3532,7 +3532,10 @@ class WebhookController extends BaseController
                     return;
                 }
                 $user->update(['bot_state' => 'awaiting_new_ticket_message|' . $text]);
-                Telegram::sendMessage(['chat_id' => $chatId, 'text' => $this->escape("✅ موضوع دریافت شد.\n\nحالا *متن پیام* خود را وارد کنید (می‌توانید همراه پیام، عکس هم ارسال کنید):"), 'parse_mode' => 'MarkdownV2']);
+                $promptMsg = "✅ " . $this->escape("موضوع دریافت شد.") . "
+
+" . $this->escape("حالا ") . "*" . $this->escape("متن پیام") . "*" . $this->escape(" خود را وارد کنید (می‌توانید همراه پیام، عکس هم ارسال کنید):");
+                Telegram::sendMessage(['chat_id' => $chatId, 'text' => $promptMsg, 'parse_mode' => 'MarkdownV2']);
 
             } elseif (Str::startsWith($state, 'awaiting_new_ticket_message|')) {
                 $subject = Str::after($state, 'awaiting_new_ticket_message|'); // This one is string, not int
