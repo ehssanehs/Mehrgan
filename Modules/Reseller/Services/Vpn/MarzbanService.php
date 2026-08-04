@@ -75,6 +75,7 @@ class MarzbanService implements VpnServiceInterface
                 }
             } else {
                 // Default to vless and vmess if empty
+                $proxies['shadowsocks'] = new \stdClass();
                 $proxies['vless'] = new \stdClass();
                 $proxies['vmess'] = new \stdClass();
                 $inbounds = new \stdClass();
