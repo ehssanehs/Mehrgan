@@ -3563,6 +3563,26 @@ class WebhookController extends BaseController
 
                 event(new TicketCreated($ticket));
 
+                // Notify admins about new ticket
+                try {
+                    $adminChatIds = getTelegramAdminChatIds($this->settings);
+                    if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
+                        Telegram::setAccessToken($botToken);
+                        $adminMsg = "🧾 *تیکت جدید از ربات تلگرام*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*موضوع:* " . $this->escape($ticket->subject) . "\n\n*متن پیام:*\n" . $this->escape($messageText);
+                        foreach ($adminChatIds as $adminChatId) {
+                            if ($adminChatId) {
+                                Telegram::sendMessage([
+                                    'chat_id' => $adminChatId,
+                                    'text' => $adminMsg,
+                                    'parse_mode' => 'MarkdownV2',
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to notify admins of new ticket: ' . $e->getMessage());
+                }
+
             } elseif (Str::startsWith($state, 'awaiting_ticket_reply|')) {
                 $ticketId = (int) Str::after($state, 'awaiting_ticket_reply|');
                 $ticket = $user->tickets()->find($ticketId);
@@ -3593,6 +3613,26 @@ class WebhookController extends BaseController
                 $this->sendOrEditMainMenu($chatId, "پشتیبانی به زودی پاسخ شما را خواهد داد.");
 
                 event(new TicketReplied($reply));
+
+                // Notify admins about ticket reply
+                try {
+                    $adminChatIds = getTelegramAdminChatIds($this->settings);
+                    if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
+                        Telegram::setAccessToken($botToken);
+                        $adminMsg = "💬 *پاسخ جدید به تیکت #{$ticket->id}*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*متن پاسخ:*\n" . $this->escape($messageText);
+                        foreach ($adminChatIds as $adminChatId) {
+                            if ($adminChatId) {
+                                Telegram::sendMessage([
+                                    'chat_id' => $adminChatId,
+                                    'text' => $adminMsg,
+                                    'parse_mode' => 'MarkdownV2',
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to notify admins of ticket reply: ' . $e->getMessage());
+                }
             }
         } catch (\Exception $e) {
             Log::error('Failed to process ticket conversation: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
@@ -4375,7 +4415,7 @@ class WebhookController extends BaseController
             Log::error('Admin approve from Telegram failed: ' . $e->getMessage(), ['order_id' => $orderId]);
             Telegram::sendMessage([
                 'chat_id' => $chatId,
-                'text' => "❌ خطا در تأیید سفارش #{$orderId}: " . $e->getMessage(),
+                'text' => "❌ خطا در تأیید سفارش " . $this->escape("#{$orderId}") . ": " . $this->escape($e->getMessage()),
                 'parse_mode' => 'MarkdownV2',
             ]);
         }
@@ -4426,7 +4466,7 @@ class WebhookController extends BaseController
         $orderType = $order->plan_id ? ($order->renews_order_id ? 'تمدید سرویس' : 'خرید سرویس') : 'شارژ کیف پول';
         Telegram::sendMessage([
             'chat_id' => $chatId,
-            'text' => "📝 *دلیل رد فیش*\n\nسفارش #{$orderId}\nنوع: {$orderType}\n\n" . $this->escape("لطفاً دلیل رد فیش را وارد کنید (این پیام برای کاربر ارسال خواهد شد):"),
+            'text' => "📝 *دلیل رد فیش*\n\nسفارش " . $this->escape("#{$orderId}") . "\nنوع: " . $this->escape($orderType) . "\n\n" . $this->escape("لطفاً دلیل رد فیش را وارد کنید (این پیام برای کاربر ارسال خواهد شد):"),
             'parse_mode' => 'MarkdownV2',
             'reply_markup' => $keyboard,
         ]);
@@ -4509,7 +4549,7 @@ class WebhookController extends BaseController
 
         Telegram::sendMessage([
             'chat_id' => $executorChatId,
-            'text' => "✅ سفارش #{$orderId} رد شد.\n{$deliveryStatus}\n\n📝 دلیل: {$reason}",
+            'text' => "✅ سفارش شماره {$orderId} رد شد.\n{$deliveryStatus}\n\n📝 دلیل: {$reason}",
         ]);
 
         // Edit the original admin notification if we have the message_id in cache
