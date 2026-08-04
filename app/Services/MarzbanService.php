@@ -86,17 +86,33 @@ class MarzbanService
             // But if it's a sequential array (list), it might be wrong if Marzban expects key-value pairs.
             // Assuming Marzban inbounds structure is like {"tag": ["protocol"]} or similar dictionary structure.
             
+            // Prepare proxies. Default to vless and vmess if empty.
+            $proxies = $userData['proxies'] ?? [];
+            if (empty($proxies)) {
+                $proxies = [
+                    'vless' => new \stdClass(),
+                    'vmess' => new \stdClass(),
+                ];
+            } else {
+                $temp = [];
+                foreach ((array)$proxies as $key => $val) {
+                    if (is_numeric($key)) {
+                        $temp[strtolower($val)] = new \stdClass();
+                    } else {
+                        $temp[$key] = empty($val) ? new \stdClass() : $val;
+                    }
+                }
+                $proxies = $temp;
+            }
+
             $payload = [
                 'username' => $userData['username'],
+                'proxies' => $proxies,
                 'inbounds' => $inbounds,
                 'expire' => $userData['expire'],
                 'data_limit' => (int)$userData['data_limit'],
                 'data_limit_reset_strategy' => 'no_reset',
             ];
-
-            if (isset($userData['proxies']) && count((array)$userData['proxies']) > 0) {
-                $payload['proxies'] = $userData['proxies'];
-            }
 
             // Manually encode to JSON to ensure correct types (especially inbounds as {})
             $jsonPayload = json_encode($payload);
@@ -134,12 +150,31 @@ class MarzbanService
         }
 
         try {
+            $payload = [
+                'expire' => $userData['expire'],
+                'data_limit' => $userData['data_limit'],
+            ];
+
+            if (isset($userData['proxies'])) {
+                $proxies = $userData['proxies'];
+                $temp = [];
+                foreach ((array)$proxies as $key => $val) {
+                    if (is_numeric($key)) {
+                        $temp[strtolower($val)] = new \stdClass();
+                    } else {
+                        $temp[$key] = empty($val) ? new \stdClass() : $val;
+                    }
+                }
+                $payload['proxies'] = $temp;
+            }
+
+            if (isset($userData['inbounds'])) {
+                $payload['inbounds'] = $userData['inbounds'];
+            }
+
             $response = Http::withToken($this->accessToken)
                 ->withHeaders(['Accept' => 'application/json'])
-                ->put($this->baseUrl . "/api/user/{$username}", [
-                    'expire' => $userData['expire'],
-                    'data_limit' => $userData['data_limit'],
-                ]);
+                ->put($this->baseUrl . "/api/user/{$username}", $payload);
 
             Log::info('Marzban Update User Response:', $response->json() ?? ['raw' => $response->body()]);
             return $response->json();
