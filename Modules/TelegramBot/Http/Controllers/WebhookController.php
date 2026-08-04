@@ -2,6 +2,7 @@
 
 namespace Modules\TelegramBot\Http\Controllers;
 
+use App\Events\OrderPaid;
 use App\Models\Order;
 use App\Models\Plan;
 use App\Models\Setting;
@@ -532,14 +533,33 @@ class WebhookController extends BaseController
         if (!$message) {
             return;
         }
-        
+
         $chat = $message->getChat();
         if (!$chat) {
             return;
         }
-        
+
         $chatId = $chat->getId();
         $text = trim($message->getText() ?? '');
+
+        // ═══════════════════════════════════════════════════════
+        // Admin rejection reason flow (may not have a User record)
+        // ═══════════════════════════════════════════════════════
+        $pendingReject = \Illuminate\Support\Facades\Cache::get("admin_reject_order_{$chatId}");
+        if ($pendingReject && !empty($text) && $text !== '/start' && $text !== '/cancel_action') {
+            if (mb_strlen($text) < 2) {
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape("❌ دلیل باید حداقل ۲ حرف باشد. لطفاً دوباره وارد کنید یا /cancel_action را بزنید:"),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                return;
+            }
+            \Illuminate\Support\Facades\Cache::forget("admin_reject_order_{$chatId}");
+            $this->executeRejection($pendingReject['order_id'], $chatId, $text);
+            return;
+        }
+
         $user = User::where('telegram_chat_id', $chatId)->first();
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
@@ -613,6 +633,10 @@ class WebhookController extends BaseController
             elseif (Str::startsWith($user->bot_state, 'awaiting_username_for_order|')) {
                 $planId = (int) Str::after($user->bot_state, 'awaiting_username_for_order|');
                 $this->processUsername($user, $planId, $text);
+            }
+            elseif (Str::startsWith($user->bot_state, 'awaiting_admin_rejection_reason|')) {
+                $orderId = (int) Str::after($user->bot_state, 'awaiting_admin_rejection_reason|');
+                $this->processAdminRejectionReason($user, $orderId, $text);
             }
 
             return;
@@ -983,6 +1007,31 @@ class WebhookController extends BaseController
         $chatId = $chat->getId();
         $messageId = $message->getMessageId();
         $data = $callbackQuery->getData();
+
+        // ═══════════════════════════════════════════════════════
+        // Admin callback handlers (no user account required)
+        // ═══════════════════════════════════════════════════════
+        if (Str::startsWith($data, 'admin_approve_')) {
+            $this->handleAdminApproveCallback($callbackQuery, $data, $chatId, $messageId);
+            return;
+        }
+        if (Str::startsWith($data, 'admin_reject_')) {
+            $this->handleAdminRejectCallback($callbackQuery, $data, $chatId, $messageId);
+            return;
+        }
+        if (Str::startsWith($data, 'admin_reject_confirm_')) {
+            $this->handleAdminRejectConfirmCallback($callbackQuery, $data, $chatId, $messageId);
+            return;
+        }
+        if ($data === 'admin_reject_cancel') {
+            \Illuminate\Support\Facades\Cache::forget("admin_reject_order_{$chatId}");
+            try {
+                Telegram::answerCallbackQuery(['callback_query_id' => $callbackQuery->getId(), 'text' => 'عملیات لغو شد.']);
+            } catch (\Exception $e) {}
+            try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
+            return;
+        }
+
         $user = User::where('telegram_chat_id', $chatId)->first();
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
@@ -1651,13 +1700,26 @@ class WebhookController extends BaseController
                             $adminMessage .= "*کاربر:* " . $this->escape($user->name) . " \\(ID: `{$user->id}`\\)\n";
                             $adminMessage .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
                             $adminMessage .= "*نوع سفارش:* " . $this->escape($orderType) . "\n\n";
-                            $adminMessage .= $this->escape("لطفا در پنل مدیریت بررسی و تایید کنید.");
+                            $adminMessage .= $this->escape("با دکمه‌های زیر می‌توانید مستقیماً از ربات تأیید یا رد کنید:");
+
+                            $adminKeyboard = Keyboard::make()->inline()
+                                ->row([
+                                    Keyboard::inlineButton([
+                                        'text' => '✅ تایید و فعال‌سازی',
+                                        'callback_data' => "admin_approve_{$orderId}"
+                                    ]),
+                                    Keyboard::inlineButton([
+                                        'text' => '❌ رد فیش',
+                                        'callback_data' => "admin_reject_{$orderId}"
+                                    ]),
+                                ]);
 
                             Telegram::sendPhoto([
                                 'chat_id' => $adminChatId,
                                 'photo' => InputFile::create(Storage::disk('public')->path($fileName)),
                                 'caption' => $adminMessage,
-                                'parse_mode' => 'MarkdownV2'
+                                'parse_mode' => 'MarkdownV2',
+                                'reply_markup' => $adminKeyboard
                             ]);
                         }
                     }
@@ -4180,6 +4242,544 @@ class WebhookController extends BaseController
             ]);
         }
     }
+    /**
+     * Handle admin "Approve" button from receipt notification.
+     */
+    protected function handleAdminApproveCallback($callbackQuery, string $data, string $chatId, int $messageId): void
+    {
+        $orderId = (int) Str::after($data, 'admin_approve_');
+        $order = Order::with('user')->find($orderId);
+
+        if (!$order) {
+            Telegram::answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+                'text' => '❌ سفارش یافت نشد.',
+                'show_alert' => true,
+            ]);
+            return;
+        }
+
+        if ($order->status !== 'pending') {
+            Telegram::answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+                'text' => '⚠️ این سفارش قبلاً پردازش شده است: ' . $order->status,
+                'show_alert' => true,
+            ]);
+            return;
+        }
+
+        // Answer the callback immediately
+        try {
+            Telegram::answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+                'text' => '⏳ در حال فعال‌سازی سرویس...',
+            ]);
+        } catch (\Exception $e) {}
+
+        // Run the provisioning
+        try {
+            DB::transaction(function () use ($order, $chatId, $messageId) {
+                $settings = Setting::all()->pluck('value', 'key');
+                $user = $order->user;
+                $plan = $order->plan;
+
+                // --- Wallet top-up ---
+                if (!$plan) {
+                    $order->update(['status' => 'paid', 'payment_method' => $order->payment_method ?: 'card']);
+                    $user->increment('balance', $order->amount);
+                    Transaction::create([
+                        'user_id' => $user->id, 'order_id' => $order->id,
+                        'amount' => $order->amount, 'type' => 'deposit',
+                        'status' => 'completed', 'description' => "شارژ کیف پول (تایید تلگرامی)"
+                    ]);
+                    // Notify user
+                    if ($user->telegram_chat_id) {
+                        $msg = "✅ کیف پول شما شارژ شد.\nمبلغ: " . number_format($order->amount) . " تومان\nموجودی: " . number_format($user->fresh()->balance) . " تومان";
+                        Telegram::setAccessToken($settings->get('telegram_bot_token'));
+                        Telegram::sendMessage(['chat_id' => $user->telegram_chat_id, 'text' => $msg, 'parse_mode' => 'Markdown']);
+                    }
+                    // Edit admin message
+                    $this->editAdminNotification($chatId, $messageId, $order, true, null);
+                    return;
+                }
+
+                // --- Purchase / Renewal ---
+                $isRenewal = (bool) $order->renews_order_id;
+                $originalOrder = $isRenewal ? Order::find($order->renews_order_id) : null;
+
+                if ($isRenewal && !$originalOrder) {
+                    throw new \Exception('سفارش اصلی برای تمدید یافت نشد.');
+                }
+
+                $uniqueUsername = ($isRenewal && $originalOrder?->panel_username)
+                    ? $originalOrder->panel_username
+                    : ($order->panel_username ?? ClientNamingService::generate($user->id, $isRenewal ? $originalOrder->id : $order->id));
+                $uniqueUsername = trim($uniqueUsername);
+
+                $newExpiresAt = $isRenewal
+                    ? (new \DateTime($originalOrder->expires_at))->modify("+{$plan->duration_days} days")
+                    : now()->addDays($plan->duration_days);
+
+                // Determine panel/server
+                $panelType = $settings->get('panel_type');
+                $targetServer = null;
+                $targetServerId = $order->server_id;
+                if (!$targetServerId && $isRenewal && $originalOrder) {
+                    $targetServerId = $originalOrder->server_id;
+                }
+
+                $xuiHost = $settings->get('xui_host');
+                $xuiUser = $settings->get('xui_user');
+                $xuiPass = $settings->get('xui_pass');
+                $inboundId = (int)$settings->get('xui_default_inbound_id');
+                $marzbanHost = $settings->get('marzban_host');
+                $marzbanUser = $settings->get('marzban_sudo_username');
+                $marzbanPass = $settings->get('marzban_sudo_password');
+                $marzbanNode = $settings->get('marzban_node_hostname');
+
+                // Default server fallback
+                if (!$targetServerId && class_exists('Modules\\MultiServer\\Models\\Server')) {
+                    $defaultServer = \Modules\MultiServer\Models\Server::where('is_active', true)
+                        ->whereRaw('current_users < capacity')->first()
+                        ?: \Modules\MultiServer\Models\Server::where('is_active', true)->first();
+                    if ($defaultServer) {
+                        $targetServerId = $defaultServer->id;
+                        $order->server_id = $targetServerId;
+                        $order->save();
+                    }
+                }
+
+                if ($targetServerId && class_exists('Modules\\MultiServer\\Models\\Server')) {
+                    $targetServer = \Modules\MultiServer\Models\Server::find($targetServerId);
+                    if ($targetServer && $targetServer->is_active) {
+                        $panelType = strtolower($targetServer->type ?? 'xui');
+                        if ($panelType === 'sanaei') $panelType = 'xui';
+                        if ($panelType === 'marzban') {
+                            $marzbanHost = $targetServer->full_host;
+                            $marzbanUser = $targetServer->username;
+                            $marzbanPass = $targetServer->password;
+                            $marzbanNode = $targetServer->marzban_node_hostname ?? $marzbanHost;
+                        } else {
+                            $xuiHost = $targetServer->full_host;
+                            $xuiUser = $targetServer->username;
+                            $xuiPass = $targetServer->password;
+                            $inboundId = $targetServer->inbound_id;
+                        }
+                    }
+                }
+
+                $success = false;
+                $finalConfig = '';
+                $finalUuid = null;
+                $finalSubId = null;
+
+                if ($panelType === 'marzban') {
+                    $marzban = new MarzbanService(
+                        (string)($marzbanHost ?? ''), (string)($marzbanUser ?? ''),
+                        (string)($marzbanPass ?? ''), (string)($marzbanNode ?? '')
+                    );
+                    $userData = ['expire' => $newExpiresAt->getTimestamp(), 'data_limit' => $plan->volume_gb * 1073741824];
+                    if ($isRenewal) {
+                        $response = $marzban->updateUser($uniqueUsername, $userData);
+                        $marzban->resetUserTraffic($uniqueUsername);
+                    } else {
+                        $response = $marzban->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                    }
+                    if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
+                        $finalConfig = $marzban->generateSubscriptionLink($response);
+                        $success = true;
+                    } else throw new \Exception('خطا در مرزبان');
+                } elseif ($panelType === 'xui') {
+                    $xui = new XUIService($xuiHost, $xuiUser, $xuiPass);
+                    if (!$xui->login()) throw new \Exception('خطا در لاگین X-UI');
+
+                    $inboundData = null;
+                    if ($targetServer) {
+                        foreach ($xui->getInbounds() as $i) if ($i['id'] == $inboundId) { $inboundData = $i; break; }
+                    } else {
+                        $im = Inbound::whereJsonContains('inbound_data->id', (int)$inboundId)->first();
+                        if ($im) $inboundData = is_string($im->inbound_data) ? json_decode($im->inbound_data, true) : $im->inbound_data;
+                    }
+                    if (!$inboundData) throw new \Exception('اینباند یافت نشد.');
+
+                    $linkType = $targetServer ? ($targetServer->link_type ?? 'single') : $settings->get('xui_link_type', 'single');
+                    $clientData = ['email' => $uniqueUsername, 'total' => $plan->volume_gb * 1073741824, 'expiryTime' => $newExpiresAt->getTimestamp() * 1000];
+
+                    if ($isRenewal) {
+                        $clients = $xui->getClients($inboundData['id']);
+                        $client = collect($clients)->first(fn($c) => strtolower(trim($c['email'])) === strtolower(trim($uniqueUsername)));
+                        if (!$client) throw new \Exception("کاربر {$uniqueUsername} یافت نشد.");
+                        $clientData['id'] = $client['id'];
+                        $clientData['subId'] = $client['subId'] ?? Str::random(16);
+                        $upRes = $xui->updateClient($inboundData['id'], $client['id'], $clientData);
+                        if ($upRes && ($upRes['success'] ?? false)) {
+                            $xui->resetClientTraffic($inboundData['id'], $uniqueUsername);
+                            $finalUuid = $client['id'];
+                            $finalSubId = $clientData['subId'];
+                        } else throw new \Exception('خطا در آپدیت کاربر');
+                    } else {
+                        if ($linkType === 'subscription') $clientData['subId'] = Str::random(16);
+                        $clients = $xui->getClients($inboundData['id']);
+                        $existingClient = collect($clients)->first(fn($c) => strtolower(trim($c['email'])) === strtolower(trim($uniqueUsername)));
+                        if ($existingClient) {
+                            $clientData['id'] = $existingClient['id'];
+                            $clientData['subId'] = $existingClient['subId'] ?? Str::random(16);
+                            $upRes = $xui->updateClient($inboundData['id'], $existingClient['id'], $clientData);
+                            if ($upRes && ($upRes['success'] ?? false)) {
+                                $xui->resetClientTraffic($inboundData['id'], $uniqueUsername);
+                                $finalUuid = $existingClient['id'];
+                                $finalSubId = $clientData['subId'];
+                            } else throw new \Exception('خطا در آپدیت کاربر موجود');
+                        } else {
+                            $addRes = $xui->addClient($inboundData['id'], $clientData);
+                            if ($addRes && ($addRes['success'] ?? false)) {
+                                $finalUuid = $addRes['generated_uuid'] ?? json_decode($addRes['obj']['settings'], true)['clients'][0]['id'];
+                                $finalSubId = $addRes['generated_subId'] ?? $clientData['subId'];
+                                if ($targetServer) $targetServer->increment('current_users');
+                            } else throw new \Exception('خطا در ساخت کاربر: ' . ($addRes['msg'] ?? 'Unknown'));
+                        }
+                    }
+
+                    $stream = json_decode($inboundData['streamSettings'] ?? '{}', true);
+                    $proto = $inboundData['protocol'] ?? 'vless';
+                    $port = $inboundData['port'] ?? 443;
+                    $addr = parse_url($xuiHost, PHP_URL_HOST);
+
+                    if ($linkType === 'subscription') {
+                        $subUrl = $targetServer ? ($targetServer->subscription_domain ?? $addr) : $settings->get('xui_subscription_url_base');
+                        $subPort = $targetServer ? ($targetServer->subscription_port ?? 2053) : '';
+                        $prot = ($targetServer && !$targetServer->is_https) ? 'http' : 'https';
+                        $base = rtrim($subUrl, '/');
+                        if ($subPort && !Str::contains($base, ":$subPort")) $base .= ":$subPort";
+                        if (!Str::startsWith($base, 'http')) $base = "$prot://$base";
+                        $finalConfig = "$base" . ($targetServer->subscription_path ?? '/sub/') . $finalSubId;
+                    } elseif ($linkType === 'tunnel') {
+                        $tunAddr = $targetServer->tunnel_address;
+                        $tunPort = $targetServer->tunnel_port ?? 443;
+                        $tls = filter_var($targetServer->tunnel_is_https, FILTER_VALIDATE_BOOLEAN);
+                        $p = ['type' => $stream['network'] ?? 'tcp'];
+                        if ($tls) { $p['security'] = 'tls'; $p['sni'] = $tunAddr; }
+                        else { $p['security'] = 'none'; if ($proto === 'vless') $p['encryption'] = 'none'; }
+                        if (($p['type'] ?? '') === 'ws') { $p['path'] = $stream['wsSettings']['path'] ?? '/'; $p['host'] = $stream['wsSettings']['headers']['Host'] ?? $tunAddr; }
+                        $remark = ($targetServer->location->flag ?? "🏳️") . "-" . $uniqueUsername;
+                        $qs = http_build_query($p);
+                        $finalConfig = "vless://{$finalUuid}@{$tunAddr}:{$tunPort}?{$qs}#" . rawurlencode($remark);
+                    } else {
+                        if (!$finalUuid) throw new \Exception("UUID پیدا نشد");
+                        $p = ['type' => $stream['network'] ?? 'tcp', 'security' => $stream['security'] ?? 'none'];
+                        if ($p['security'] === 'tls') $p['sni'] = $addr;
+                        $qs = http_build_query(array_filter($p));
+                        $finalConfig = "vless://{$finalUuid}@{$addr}:{$port}?{$qs}#" . rawurlencode($plan->name);
+                    }
+                    $success = true;
+                }
+
+                if (!$success) throw new \Exception('خطای ناشناخته در فعال‌سازی');
+
+                // Save
+                $dataToUpdate = ['config_details' => $finalConfig, 'expires_at' => $newExpiresAt, 'panel_username' => $uniqueUsername, 'panel_client_id' => $finalUuid, 'panel_sub_id' => $finalSubId];
+                if ($isRenewal) {
+                    $originalOrder->update($dataToUpdate);
+                } else {
+                    $order->update($dataToUpdate);
+                }
+                $order->update(['status' => 'paid', 'payment_method' => $order->payment_method ?: 'card']);
+                $desc = ($isRenewal ? "تمدید سرویس" : "خرید سرویس") . " {$plan->name} (تایید تلگرامی)";
+                Transaction::create(['user_id' => $user->id, 'order_id' => $order->id, 'amount' => $plan->price, 'type' => 'purchase', 'status' => 'completed', 'description' => $desc]);
+
+                // Notify user
+                if ($user->telegram_chat_id) {
+                    try {
+                        $displayOrder = $isRenewal ? $originalOrder : $order;
+                        $esc = fn($t) => $this->escape($t);
+                        $t = "✅ *" . ($isRenewal ? "تمدید موفق!" : "خرید موفق!") . "*\n\n";
+                        $t .= "📦 پلن: " . $esc($plan->name) . "\n";
+                        $t .= "⏳ انقضا: " . $displayOrder->expires_at->format('Y/m/d H:i') . "\n\n";
+                        $t .= "🔗 *لینک:*\n`{$esc($finalConfig)}`";
+                        Telegram::setAccessToken($settings->get('telegram_bot_token'));
+                        Telegram::sendMessage(['chat_id' => $user->telegram_chat_id, 'text' => $t, 'parse_mode' => 'MarkdownV2']);
+                    } catch (\Exception $e) {
+                        Log::error('TG notify on admin approve failed: ' . $e->getMessage());
+                    }
+                }
+
+                // Edit admin notification message
+                $this->editAdminNotification($chatId, $messageId, $order, true, null);
+
+                if (class_exists(OrderPaid::class)) {
+                    try { OrderPaid::dispatch($order); } catch (\Exception $e) {}
+                }
+            });
+        } catch (\Exception $e) {
+            Log::error('Admin approve from Telegram failed: ' . $e->getMessage(), ['order_id' => $orderId]);
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => "❌ خطا در تأیید سفارش #{$orderId}: " . $e->getMessage(),
+                'parse_mode' => 'MarkdownV2',
+            ]);
+        }
+    }
+
+    /**
+     * Handle admin "Reject" button — prompt for reason.
+     */
+    protected function handleAdminRejectCallback($callbackQuery, string $data, string $chatId, int $messageId): void
+    {
+        $orderId = (int) Str::after($data, 'admin_reject_');
+        $order = Order::find($orderId);
+
+        if (!$order) {
+            Telegram::answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+                'text' => '❌ سفارش یافت نشد.',
+                'show_alert' => true,
+            ]);
+            return;
+        }
+
+        if (!in_array($order->status, ['pending', 'paid'])) {
+            Telegram::answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+                'text' => '⚠️ این سفارش قبلاً پردازش شده است: ' . $order->status,
+                'show_alert' => true,
+            ]);
+            return;
+        }
+
+        try {
+            Telegram::answerCallbackQuery(['callback_query_id' => $callbackQuery->getId()]);
+        } catch (\Exception $e) {}
+
+        // Store orderId + messageId temporarily so the admin can type the reason
+        // We'll use a simple cache for this since admins may not have User records
+        \Illuminate\Support\Facades\Cache::put(
+            "admin_reject_order_{$chatId}",
+            ['order_id' => $orderId, 'message_id' => $messageId],
+            now()->addMinutes(10)
+        );
+
+        $keyboard = Keyboard::make()->inline()->row([
+            Keyboard::inlineButton(['text' => '❌ انصراف', 'callback_data' => 'admin_reject_cancel']),
+        ]);
+
+        $orderType = $order->plan_id ? ($order->renews_order_id ? 'تمدید سرویس' : 'خرید سرویس') : 'شارژ کیف پول';
+        Telegram::sendMessage([
+            'chat_id' => $chatId,
+            'text' => "📝 *دلیل رد فیش*\n\nسفارش #{$orderId}\nنوع: {$orderType}\n\n" . $this->escape("لطفاً دلیل رد فیش را وارد کنید (این پیام برای کاربر ارسال خواهد شد):"),
+            'parse_mode' => 'MarkdownV2',
+            'reply_markup' => $keyboard,
+        ]);
+    }
+
+    /**
+     * Handle admin rejection reason confirmation (callback from inline button).
+     */
+    protected function handleAdminRejectConfirmCallback($callbackQuery, string $data, string $chatId, int $messageId): void
+    {
+        // This is triggered by a confirm button after reason is entered.
+        // Not currently used — reason is submitted as text.
+        Telegram::answerCallbackQuery([
+            'callback_query_id' => $callbackQuery->getId(),
+            'text' => 'لطفاً دلیل را به صورت متن ارسال کنید.',
+            'show_alert' => true,
+        ]);
+    }
+
+    /**
+     * Process admin rejection reason text input.
+     */
+    protected function processAdminRejectionReason($user, int $orderId, string $reason): void
+    {
+        $chatId = $user->telegram_chat_id;
+        $reason = trim($reason);
+
+        if (mb_strlen($reason) < 2) {
+            $user->update(['bot_state' => 'awaiting_admin_rejection_reason|' . $orderId]);
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $this->escape("❌ دلیل باید حداقل ۲ حرف باشد. لطفاً دوباره وارد کنید:"),
+                'parse_mode' => 'MarkdownV2',
+            ]);
+            return;
+        }
+
+        $user->update(['bot_state' => null]);
+        $this->executeRejection($orderId, $chatId, $reason);
+    }
+
+    /**
+     * Execute the rejection: disable VPN account, mark order, notify user.
+     */
+    protected function executeRejection(int $orderId, string $executorChatId, string $reason): void
+    {
+        $order = Order::with('user')->find($orderId);
+        if (!$order) {
+            Telegram::sendMessage(['chat_id' => $executorChatId, 'text' => '❌ سفارش یافت نشد.']);
+            return;
+        }
+
+        if (!in_array($order->status, ['pending', 'paid'])) {
+            Telegram::sendMessage(['chat_id' => $executorChatId, 'text' => '⚠️ سفارش قبلاً پردازش شده.']);
+            return;
+        }
+
+        $settings = Setting::all()->pluck('value', 'key');
+        $user = $order->user;
+
+        // If order was paid, disable the VPN account
+        if ($order->status === 'paid' && $order->plan_id && $order->panel_username) {
+            try {
+                $this->disableVpnAccountStatic($order, $settings);
+            } catch (\Exception $e) {
+                Log::error('Failed to disable VPN on admin reject: ' . $e->getMessage(), ['order_id' => $orderId]);
+            }
+        }
+
+        // Mark as rejected
+        $order->update(['status' => 'rejected']);
+
+        // Notify user
+        if ($user && $user->telegram_chat_id) {
+            try {
+                $esc = fn($t) => $this->escape($t);
+                $msg = "❌ *پرداخت شما تایید نشد*\n\n";
+                if ($order->plan_id) {
+                    $msg .= "📦 پلن: " . $esc($order->plan?->name ?? 'نامشخص') . "\n";
+                    if ($order->renews_order_id) $msg .= "🔄 نوع: تمدید سرویس\n";
+                    $msg .= "⚠️ *سرویس شما غیرفعال شد\.*\n";
+                }
+                $msg .= "\n📝 *دلیل:* " . $esc($reason) . "\n\n";
+                $msg .= $esc("در صورت نیاز به توضیحات بیشتر، تیکت پشتیبانی ثبت کنید.");
+
+                $keyboard = Keyboard::make()->inline()
+                    ->row([
+                        Keyboard::inlineButton(['text' => '📝 ایجاد تیکت', 'callback_data' => '/support_new']),
+                        Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start']),
+                    ]);
+
+                Telegram::setAccessToken($settings->get('telegram_bot_token'));
+                Telegram::sendMessage([
+                    'chat_id' => $user->telegram_chat_id,
+                    'text' => $msg,
+                    'parse_mode' => 'MarkdownV2',
+                    'reply_markup' => $keyboard,
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to notify user on rejection: ' . $e->getMessage());
+            }
+        }
+
+        // Confirm to admin
+        Telegram::sendMessage([
+            'chat_id' => $executorChatId,
+            'text' => "✅ سفارش #{$orderId} رد شد و به کاربر اطلاع داده شد.\n\n📝 دلیل: {$this->escape($reason)}",
+            'parse_mode' => 'MarkdownV2',
+        ]);
+
+        // Edit the original admin notification if we have the message_id in cache
+        $cached = \Illuminate\Support\Facades\Cache::get("admin_reject_order_{$executorChatId}");
+        if ($cached && isset($cached['message_id'])) {
+            $this->editAdminNotification($executorChatId, $cached['message_id'], $order, false, $reason);
+            \Illuminate\Support\Facades\Cache::forget("admin_reject_order_{$executorChatId}");
+        }
+    }
+
+    /**
+     * Disable a VPN account (static version for use within this controller).
+     */
+    protected function disableVpnAccountStatic(Order $order, $settings): void
+    {
+        $panelType = $settings->get('panel_type');
+        $targetServer = null;
+        $targetServerId = $order->server_id;
+        if ($order->renews_order_id && !$targetServerId) {
+            $originalOrder = Order::find($order->renews_order_id);
+            if ($originalOrder) $targetServerId = $originalOrder->server_id;
+        }
+        if ($targetServerId && class_exists('Modules\\MultiServer\\Models\\Server')) {
+            $targetServer = \Modules\MultiServer\Models\Server::find($targetServerId);
+        }
+        if ($targetServer && $targetServer->is_active) {
+            $panelType = strtolower($targetServer->type ?? 'xui');
+            if ($panelType === 'sanaei') $panelType = 'xui';
+        }
+
+        $username = $order->panel_username;
+        if (empty($username)) {
+            Log::warning('Cannot disable VPN: no panel_username', ['order_id' => $order->id]);
+            return;
+        }
+
+        if ($panelType === 'marzban') {
+            $mh = $targetServer ? $targetServer->full_host : $settings->get('marzban_host');
+            $mu = $targetServer ? $targetServer->username : $settings->get('marzban_sudo_username');
+            $mp = $targetServer ? $targetServer->password : $settings->get('marzban_sudo_password');
+            $mn = $targetServer ? ($targetServer->marzban_node_hostname ?? $mh) : $settings->get('marzban_node_hostname');
+            $marzban = new MarzbanService((string)$mh, (string)$mu, (string)$mp, (string)$mn);
+            $marzban->disableUser($username);
+            Log::info('Marzban user disabled (TG reject)', ['username' => $username]);
+        } elseif ($panelType === 'xui') {
+            $xHost = $targetServer ? $targetServer->full_host : $settings->get('xui_host');
+            $xUser = $targetServer ? $targetServer->username : $settings->get('xui_user');
+            $xPass = $targetServer ? $targetServer->password : $settings->get('xui_pass');
+            $xInbound = $targetServer ? $targetServer->inbound_id : (int)$settings->get('xui_default_inbound_id');
+            $xui = new XUIService($xHost, $xUser, $xPass);
+            if (!$xui->login()) {
+                Log::error('XUI login failed during TG reject');
+                return;
+            }
+            $inboundData = null;
+            if ($targetServer) {
+                foreach ($xui->getInbounds() as $i) if ($i['id'] == $xInbound) { $inboundData = $i; break; }
+            } else {
+                $im = Inbound::whereJsonContains('inbound_data->id', (int)$xInbound)->first();
+                if ($im) $inboundData = is_string($im->inbound_data) ? json_decode($im->inbound_data, true) : $im->inbound_data;
+            }
+            if (!$inboundData) return;
+            $clients = $xui->getClients($inboundData['id']);
+            $client = collect($clients)->first(fn($c) => strtolower(trim($c['email'] ?? '')) === strtolower(trim($username)));
+            if ($client) {
+                $xui->disableClient($inboundData['id'], $username, 0, $client['id'] ?? '', $client['subId'] ?? Str::random(16));
+                if ($targetServer) $targetServer->decrement('current_users');
+                Log::info('XUI client disabled (TG reject)', ['email' => $username]);
+            }
+        }
+    }
+
+    /**
+     * Edit the original admin notification caption to reflect approval/rejection.
+     */
+    protected function editAdminNotification(string $chatId, int $messageId, Order $order, bool $approved, ?string $reason): void
+    {
+        try {
+            $order->refresh();
+            $orderType = $order->renews_order_id ? 'تمدید سرویس' : ($order->plan_id ? 'خرید سرویس' : 'شارژ کیف پول');
+            $user = $order->user;
+            $statusEmoji = $approved ? '✅' : '❌';
+            $statusText = $approved ? 'تایید شد' : 'رد شد';
+
+            $caption = "🧾 *رسید سفارش \\#{$order->id}*\n\n";
+            $caption .= "*کاربر:* " . $this->escape($user?->name ?? 'نامشخص') . " \\(ID: `{$order->user_id}`\\)\n";
+            $caption .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
+            $caption .= "*نوع:* " . $this->escape($orderType) . "\n";
+            $caption .= "*وضعیت نهایی:* {$statusEmoji} *{$this->escape($statusText)}*\n";
+            if (!$approved && $reason) {
+                $caption .= "*دلیل رد:* " . $this->escape($reason) . "\n";
+            }
+            $caption .= "\n_پردازش شده از طریق ربات تلگرام_";
+
+            Telegram::editMessageCaption([
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'caption' => $caption,
+                'parse_mode' => 'MarkdownV2',
+            ]);
+        } catch (\Exception $e) {
+            // Message may have been deleted or caption unchanged — fine
+            Log::info('Could not edit admin notification caption: ' . $e->getMessage());
+        }
+    }
+
     protected function sendOrEditMessage(int $chatId, string $text, $keyboard, ?int $messageId = null)
     {
         $payload = [
