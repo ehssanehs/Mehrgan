@@ -13,6 +13,7 @@ use App\Models\Transaction;
 use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
 use App\Services\SubscriptionImportService;
+use App\Services\TelegramOrderNotificationService;
 use App\Services\XUIService;
 use App\Models\Notification;
 use Illuminate\Http\Request;
@@ -870,6 +871,8 @@ class OrderController extends Controller
             return redirect()->route('dashboard')->with('error', 'پرداخت با خطا مواجه شد. لطفاً با پشتیبانی تماس بگیرید.');
         }
 
+        app(TelegramOrderNotificationService::class)
+            ->sendServiceActivated($order->fresh());
 
         session()->forget(['discount_code', 'discount_amount', 'discount_applied_order_id']);
 

@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\Transaction;
 use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
+use App\Services\TelegramOrderNotificationService;
 use App\Services\XUIService;
 use Filament\Forms;
 use Filament\Forms\Components\Textarea as FormTextarea;
@@ -23,7 +24,6 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Telegram\Bot\Keyboard\Keyboard;
 use Illuminate\Support\Facades\Storage;
 use Telegram\Bot\Laravel\Facades\Telegram;
 use Illuminate\Support\Str;
@@ -73,7 +73,9 @@ class OrderResource extends Resource
                 Tables\Actions\EditAction::make(),
                 Action::make('approve')->label('تایید و اجرا')->icon('heroicon-o-check-circle')->color('success')->requiresConfirmation()->modalHeading('تایید پرداخت سفارش')->modalDescription('آیا از تایید این پرداخت اطمینان دارید؟')->visible(fn (Order $order): bool => $order->status === 'pending')
                     ->action(function (Order $order) {
-                        DB::transaction(function () use ($order) {
+                        $notifyServiceActivation = false;
+
+                        DB::transaction(function () use ($order, &$notifyServiceActivation) {
                             $settings = Setting::all()->pluck('value', 'key');
                             /** @var \App\Models\User $user */
                             $user = $order->user;
@@ -380,102 +382,22 @@ class OrderResource extends Resource
                                 }
 
                                 Notification::make()->title('عملیات موفقیت‌آمیز بود.')->success()->send();
-
-                                if ($user->telegram_chat_id) {
-                                    try {
-                                        Telegram::setAccessToken($settings->get('telegram_bot_token'));
-
-                                        // انتخاب سفارش صحیح برای نمایش اطلاعات
-                                        $displayOrder = $isRenewal ? $originalOrder : $order;
-
-                                        $displayOrder->load(['server.location', 'plan']);
-
-                                        $server = $displayOrder->server;
-                                        $serverName = $server?->name ?? 'سرور اصلی';
-                                        $locationFlag = $server?->location?->flag ?? '🏳️';
-                                        $locationName = $server?->location?->name ?? 'نامشخص';
-
-                                        $planModel = $displayOrder->plan;
-
-
-                                        // تابع escape کمکی
-                                        $escape = function($text) {
-                                            $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-                                            return str_replace($chars, array_map(fn($c) => '\\' . $c, $chars), $text);
-                                        };
-
-                                        // ساخت پیام کامل
-                                        $msgText = "✅ *" . ($isRenewal ? "تمدید موفق!" : "خرید موفق!") . "*\n\n";
-                                        $msgText .= "📦 *پلن:* `" . $escape($planModel->name) . "`\n";
-
-                                        if (!$isRenewal) {
-                                            $msgText .= "🌍 *موقعیت:* {$locationFlag} " . $escape($locationName) . "\n";
-                                            $msgText .= "🖥 *سرور:* " . $escape($serverName) . "\n";
-                                        }
-
-                                        $msgText .= "💾 *حجم:* {$planModel->volume_gb} گیگابایت\n";
-                                        $msgText .= "📅 *مدت:* {$planModel->duration_days} روز\n";
-                                        $msgText .= "⏳ *انقضا:* `" . ($displayOrder->expires_at?->format('Y/m/d H:i') ?? 'نامشخص') . "`\n";
-                                        $msgText .= "👤 *یوزرنیم:* `{$displayOrder->panel_username}`\n\n";
-                                        $msgText .= "🔗 *لینک کانفیگ شما:*\n";
-                                        $msgText .= "{$escape($finalConfig)}\n\n";
-                                        $msgText .= $escape("⚠️ روی لینک بالا کلیک کنید تا کپی شود");
-
-                                        // ساخت کیبورد
-                                        $keyboard = Keyboard::make()->inline()
-                                            ->row([
-                                                Keyboard::inlineButton(['text' => '📋 کپی لینک کانفیگ', 'callback_data' => "copy_link_{$displayOrder->id}"]),
-                                                Keyboard::inlineButton(['text' => '📱 QR Code', 'callback_data' => "qrcode_order_{$displayOrder->id}"])
-                                            ])
-                                            ->row([
-                                                Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services']),
-                                                Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])
-                                            ]);
-
-                                        Telegram::sendMessage([
-                                            'chat_id' => $user->telegram_chat_id,
-                                            'text' => $msgText,
-                                            'parse_mode' => 'MarkdownV2',
-                                            'reply_markup' => $keyboard
-                                        ]);
-
-                                    } catch (\Exception $e) {
-                                        Log::error('Error sending TG success message (Admin Approve): ' . $e->getMessage(), [
-                                            'order_id' => $order->id,
-                                            'trace' => $e->getTraceAsString()
-                                        ]);
-
-                                        // ✅ Fallback با دکمه‌های کامل
-                                        try {
-                                            Telegram::setAccessToken($settings->get('telegram_bot_token'));
-
-                                            $displayOrderId = $isRenewal ? $originalOrder->id : $order->id;
-
-                                            $keyboard = Keyboard::make()->inline()
-                                                ->row([
-                                                    Keyboard::inlineButton(['text' => '📋 کپی لینک کانفیگ', 'callback_data' => "copy_link_{$displayOrderId}"]),
-                                                    Keyboard::inlineButton(['text' => '📱 QR Code', 'callback_data' => "qrcode_order_{$displayOrderId}"])
-                                                ])
-                                                ->row([
-                                                    Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services']),
-                                                    Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])
-                                                ]);
-
-                                            $simpleMsg = ($isRenewal ? "✅ سرویس تمدید شد." : "✅ سرویس فعال شد.") . "\n\n`{$finalConfig}`";
-
-                                            Telegram::sendMessage([
-                                                'chat_id' => $user->telegram_chat_id,
-                                                'text' => $simpleMsg,
-                                                'parse_mode' => 'Markdown',
-                                                'reply_markup' => $keyboard
-                                            ]);
-                                        } catch (\Exception $e2) {
-                                            Log::error('Fallback message also failed: ' . $e2->getMessage());
-                                        }
-                                    }
-                                }
+                                $notifyServiceActivation = true;
                             }
                         });
+
+                        if ($notifyServiceActivation) {
+                            $telegramNotified = app(TelegramOrderNotificationService::class)
+                                ->sendServiceActivated($order->fresh());
+
+                            if (! $telegramNotified) {
+                                Notification::make()
+                                    ->title('سرویس فعال شد، اما پیام تلگرام ارسال نشد.')
+                                    ->body('شناسه چت کاربر و توکن ربات تلگرام را بررسی کنید.')
+                                    ->warning()
+                                    ->send();
+                            }
+                        }
                     }),
                 Action::make('reject')
                     ->label('رد فیش و غیرفعال‌سازی')
@@ -492,12 +414,11 @@ class OrderResource extends Resource
                     ->action(function (Order $order, array $data) {
                         $reason = $data['rejection_reason'];
                         $settings = Setting::all()->pluck('value', 'key');
-                        $user = $order->user;
 
                         // If order was paid (VPN account exists), disable it on the panel
                         if ($order->status === 'paid' && $order->plan_id && $order->panel_username) {
                             try {
-                                $this->disableVpnAccount($order, $settings);
+                                static::disableVpnAccount($order, $settings);
                             } catch (\Exception $e) {
                                 Log::error('Failed to disable VPN account on reject', [
                                     'order_id' => $order->id,
@@ -513,55 +434,25 @@ class OrderResource extends Resource
                             'payment_method' => $order->payment_method ?: 'card',
                         ]);
 
-                        // Notify user via Telegram
-                        if ($user && $user->telegram_chat_id) {
-                            try {
-                                $escape = function ($text) {
-                                    $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-                                    return str_replace($chars, array_map(fn($c) => '\\' . $c, $chars), $text);
-                                };
+                        // Notify the user with a parse-safe Telegram message and the rejection reason.
+                        $telegramNotified = app(TelegramOrderNotificationService::class)
+                            ->sendPaymentRejected($order->fresh(), $reason);
 
-                                $msg = "❌ *پرداخت شما تایید نشد*\\n\\n";
-                                if ($order->plan_id) {
-                                    $planName = $order->plan?->name ?? 'نامشخص';
-                                    $msg .= "📦 پلن: " . $escape($planName) . "\\n";
-                                    if ($order->renews_order_id) {
-                                        $msg .= "🔄 نوع: تمدید سرویس\\n";
-                                    }
-                                    $msg .= "\\n⚠️ *سرویس شما غیرفعال شد\\.*\\n";
-                                }
-                                $msg .= "\\n📝 *دلیل:* " . $escape($reason) . "\\n\\n";
-                                $msg .= $escape("در صورت نیاز به توضیحات بیشتر، تیکت پشتیبانی ثبت کنید.");
+                        $notification = Notification::make()
+                            ->title('سفارش و رسید پرداخت رد شد.')
+                            ->body($telegramNotified
+                                ? 'دلیل رد از طریق ربات تلگرام برای کاربر ارسال شد.'
+                                : 'پیام تلگرام ارسال نشد؛ شناسه چت کاربر و توکن ربات را بررسی کنید.');
 
-                                $keyboard = Keyboard::make()->inline()
-                                    ->row([
-                                        Keyboard::inlineButton(['text' => '📝 ایجاد تیکت', 'callback_data' => '/support_new']),
-                                        Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start']),
-                                    ]);
+                        $telegramNotified
+                            ? $notification->success()
+                            : $notification->warning();
 
-                                Telegram::setAccessToken($settings->get('telegram_bot_token'));
-                                Telegram::sendMessage([
-                                    'chat_id' => $user->telegram_chat_id,
-                                    'text' => $msg,
-                                    'parse_mode' => 'MarkdownV2',
-                                    'reply_markup' => $keyboard,
-                                ]);
-                            } catch (\Exception $e) {
-                                Log::error('Failed to send rejection Telegram message', [
-                                    'order_id' => $order->id,
-                                    'error' => $e->getMessage(),
-                                ]);
-                            }
-                        }
-
-                        Notification::make()
-                            ->title('سفارش رد شد و سرویس غیرفعال گردید.')
-                            ->success()
-                            ->send();
+                        $notification->send();
                     })
                     ->requiresConfirmation()
                     ->modalHeading('رد فیش پرداخت')
-                    ->modalDescription('با این کار سرویس کاربر غیرفعال شده و سفارش رد می‌شود. دلیل را وارد کنید.')
+                    ->modalDescription('سفارش رد می‌شود و دلیل رد برای کاربر ارسال خواهد شد. اگر سرویس قبلاً فعال شده باشد، غیرفعال می‌شود.')
                     ->modalIcon('heroicon-o-x-circle'),
                 Tables\Actions\DeleteAction::make(),
             ])
