@@ -1642,24 +1642,25 @@ class WebhookController extends BaseController
                     ]);
                     $this->sendOrEditMainMenu($chatId, "چه کار دیگری برایتان انجام دهم?");
 
-                    $adminChatId = $this->settings->get('telegram_admin_chat_id');
-                    if ($adminChatId) {
-                        $orderType = $order->renews_order_id ? 'تمدید سرویس' : ($order->plan_id ? 'خرید سرویس' : 'شارژ کیف پول');
+                    $adminChatIds = getTelegramAdminChatIds($this->settings);
+                    foreach ($adminChatIds as $adminChatId) {
+                        if ($adminChatId) {
+                            $orderType = $order->renews_order_id ? 'تمدید سرویس' : ($order->plan_id ? 'خرید سرویس' : 'شارژ کیف پول');
 
-                        $adminMessage = "🧾 *رسید جدید برای سفارش \\#{$orderId}*\n\n";
-                        $adminMessage .= "*کاربر:* " . $this->escape($user->name) . " \\(ID: `{$user->id}`\\)\n";
-                        $adminMessage .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
-                        $adminMessage .= "*نوع سفارش:* " . $this->escape($orderType) . "\n\n";
-                        $adminMessage .= $this->escape("لطفا در پنل مدیریت بررسی و تایید کنید.");
+                            $adminMessage = "🧾 *رسید جدید برای سفارش \\#{$orderId}*\n\n";
+                            $adminMessage .= "*کاربر:* " . $this->escape($user->name) . " \\(ID: `{$user->id}`\\)\n";
+                            $adminMessage .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
+                            $adminMessage .= "*نوع سفارش:* " . $this->escape($orderType) . "\n\n";
+                            $adminMessage .= $this->escape("لطفا در پنل مدیریت بررسی و تایید کنید.");
 
-                        Telegram::sendPhoto([
-                            'chat_id' => $adminChatId,
-                            'photo' => InputFile::create(Storage::disk('public')->path($fileName)),
-                            'caption' => $adminMessage,
-                            'parse_mode' => 'MarkdownV2'
-                        ]);
+                            Telegram::sendPhoto([
+                                'chat_id' => $adminChatId,
+                                'photo' => InputFile::create(Storage::disk('public')->path($fileName)),
+                                'caption' => $adminMessage,
+                                'parse_mode' => 'MarkdownV2'
+                            ]);
+                        }
                     }
-
                 } catch (\Exception $e) {
                     Log::error("Receipt processing failed for order {$orderId}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
                     Telegram::sendMessage(['chat_id' => $chatId, 'text' => $this->escape("❌ خطا در پردازش رسید. لطفاً دوباره تلاش کنید."), 'parse_mode' => 'MarkdownV2']);

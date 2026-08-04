@@ -204,7 +204,7 @@ return [
         'data.marzban_sudo_password' => 'رمز عبور ادمین',
 
         'data.telegram_bot_token' => 'توکن ربات تلگرام',
-        'data.telegram_admin_chat_id' => 'چت آی‌دی ادمین',
+        'data.telegram_admin_chat_id' => 'چت آی‌دی ادمین‌ها',
 
         // فیلدهای عمومی
         'email' => 'ایمیل',

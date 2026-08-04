@@ -11,6 +11,7 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Tabs;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -45,6 +46,20 @@ class ThemeSettings extends Page implements HasForms
             }
             if ($key === 'xui_default_inbound_id' && $value !== null) {
                 $settings[$key] = (string) $value;
+            }
+            // Convert telegram_admin_chat_id to array for TagsInput
+            if ($key === 'telegram_admin_chat_id' && $value !== null) {
+                $decoded = json_decode($value, true);
+                if (is_array($decoded)) {
+                    $settings[$key] = $decoded;
+                } elseif (is_numeric($value)) {
+                    // Old single-value format — wrap in array
+                    $settings[$key] = [$value];
+                } else {
+                    // Unknown format — try splitting by comma
+                    $parts = preg_split('/[,\s،]+/', $value, -1, PREG_SPLIT_NO_EMPTY);
+                    $settings[$key] = !empty($parts) ? $parts : [];
+                }
             }
         }
 
@@ -200,7 +215,12 @@ class ThemeSettings extends Page implements HasForms
                     Tabs\Tab::make('تنظیمات ربات تلگرام')->icon('heroicon-o-paper-airplane')->schema([
                         Section::make('اطلاعات اتصال ربات')->schema([
                             TextInput::make('telegram_bot_token')->label('توکن ربات تلگرام')->password(),
-                            TextInput::make('telegram_admin_chat_id')->label('چت آی‌دی ادمین')->numeric(),
+                            TagsInput::make('telegram_admin_chat_id')
+                                ->label('چت آی‌دی ادمین‌ها')
+                                ->placeholder('آی‌دی عددی را وارد کنید و Enter بزنید')
+                                ->helperText('می‌توانید چندین چت آی‌دی ادمین اضافه کنید. هر آی‌دی را تایپ کرده و Enter بزنید.')
+                                ->splitKeys([',', '،', ' ', 'Enter', 'Tab'])
+                                ->nestedRecursiveRules(['numeric']),
                             TextInput::make('site_login_url')
                                 ->label('آدرس ورود به سایت (استفاده در دکمه اطلاعات ورود)')
                                 ->placeholder('https://example.com/login')
