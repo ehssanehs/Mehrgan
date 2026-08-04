@@ -65,7 +65,7 @@ if [ -z "$INSTANCE_SLUG" ]; then
     i=1
     while IFS= read -r slug; do
         local_path="/var/www/$slug"
-        local domain=$(grep -E '^APP_URL=' "${local_path}/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
+        domain=$(grep -E '^APP_URL=' "${local_path}/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
         printf "  ${GREEN}%d${NC}) %-25s 🌐 %s\n" "$i" "$slug" "$domain"
         instances+=("$slug")
         i=$((i + 1))
