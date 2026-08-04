@@ -46,117 +46,6 @@ class WebhookController extends BaseController
         $this->settings = \collect();
     }
 
-    /**
-     * Return the bot token in the same normalised form used when registering the
-     * webhook. Tokens are often pasted from a Bot API URL (with a `bot` prefix)
-     * or with a trailing newline. Passing either form to the SDK makes the
-     * webhook run successfully but causes every outgoing message to fail.
-     */
-    protected function getConfiguredBotToken(): ?string
-    {
-        if ($this->settings->isEmpty()) {
-            $this->settings = Setting::all()->pluck('value', 'key');
-        }
-
-        $configuredToken = $this->settings->get('telegram_bot_token');
-        $token = (string) ($configuredToken ?: config('telegram.bots.mybot.token', ''));
-        $token = trim($token);
-        $token = preg_replace('/^bot/i', '', $token) ?? '';
-        $token = trim($token);
-
-        return preg_match('/^\d{5,}:[A-Za-z0-9_-]{20,}$/', $token) === 1
-            ? $token
-            : null;
-    }
-
-    /**
-     * Telegram only accepts HTTPS Web App URLs. Do not turn an HTTP/local
-     * APP_URL into a fake HTTPS URL: that makes Telegram reject the whole
-     * message, including the otherwise valid reply keyboard.
-     */
-    /**
-     * Read optional bot copy without allowing an empty admin value to become
-     * an invalid Telegram message. The settings module is optional for the
-     * actual webhook flow, so a missing table also falls back safely.
-     */
-    protected function getConfiguredBotMessage(string $key, string $default): string
-    {
-        try {
-            $configuredMessage = TelegramBotSetting::where('key', $key)->value('value');
-
-            return is_string($configuredMessage) && trim($configuredMessage) !== ''
-                ? $configuredMessage
-                : $default;
-        } catch (\Throwable $exception) {
-            Log::warning('Could not load Telegram bot message setting.', [
-                'key' => $key,
-                'error' => $exception->getMessage(),
-            ]);
-
-            return $default;
-        }
-    }
-
-    protected function getPublicWebAppUrl(): ?string
-    {
-        $url = rtrim(trim((string) config('app.url')), '/');
-        $parts = parse_url($url);
-        $host = strtolower(rtrim((string) ($parts['host'] ?? ''), '.'));
-
-        if (strtolower((string) ($parts['scheme'] ?? '')) !== 'https' || $host === '') {
-            return null;
-        }
-
-        if (in_array($host, ['localhost', '127.0.0.1', '::1'], true)) {
-            return null;
-        }
-
-        // Private/reserved IP addresses cannot be opened by Telegram clients.
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false
-            && filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
-            return null;
-        }
-
-        return $url;
-    }
-
-    /**
-     * Send the first response to a new user. A malformed optional keyboard
-     * (most commonly an HTTP APP_URL used for the Mini App) must not leave the
-     * user with a silent chat after their account has been created.
-     */
-    protected function sendWelcomeMessage(int $chatId, string $welcomeMessage): void
-    {
-        try {
-            Telegram::sendMessage([
-                'chat_id' => $chatId,
-                'text' => $welcomeMessage,
-                'reply_markup' => $this->getReplyMainMenu($chatId),
-            ]);
-
-            return;
-        } catch (\Throwable $exception) {
-            Log::error('Failed to send Telegram welcome message with keyboard.', [
-                'chat_id' => $chatId,
-                'error' => $exception->getMessage(),
-            ]);
-        }
-
-        // Retry without the optional keyboard so the user still receives a
-        // response and can use /start again after the configuration is fixed.
-        try {
-            Telegram::sendMessage([
-                'chat_id' => $chatId,
-                'text' => $welcomeMessage,
-            ]);
-        } catch (\Throwable $fallbackException) {
-            Log::critical('Failed to send Telegram welcome message.', [
-                'chat_id' => $chatId,
-                'error' => $fallbackException->getMessage(),
-            ]);
-        }
-    }
-
     public function sendBroadcastMessage(string $chatId, string $message): bool
     {
         try {
@@ -164,7 +53,7 @@ class WebhookController extends BaseController
                 $this->settings = Setting::all()->pluck('value', 'key');
             }
 
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
                 Log::error('❌ Cannot send broadcast message: bot token is not set.');
                 return false;
@@ -201,7 +90,7 @@ class WebhookController extends BaseController
             if ($this->settings->isEmpty()) { // ✅ اصلاح
                 $this->settings = Setting::all()->pluck('value', 'key');
             }
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
                 Log::error('Cannot send single Telegram message: bot token is not set.');
                 return false;
@@ -242,7 +131,7 @@ class WebhookController extends BaseController
             if ($this->settings->isEmpty()) {
                 $this->settings = Setting::all()->pluck('value', 'key');
             }
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
                 Log::error('Cannot send approval message: bot token is not set.');
                 return false;
@@ -299,7 +188,7 @@ class WebhookController extends BaseController
             if ($this->settings->isEmpty()) {
                 $this->settings = Setting::all()->pluck('value', 'key');
             }
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
                 Log::error('Cannot send rejection message: bot token is not set.');
                 return false;
@@ -342,9 +231,9 @@ class WebhookController extends BaseController
     {
         try {
             $this->settings = Setting::all()->pluck('value', 'key');
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
-                Log::warning('Telegram bot token is missing or invalid.');
+                Log::warning('Telegram bot token is not set.');
                 return response('ok', 200);
             }
             Telegram::setAccessToken($botToken);
@@ -360,13 +249,8 @@ class WebhookController extends BaseController
                     $this->handlePhotoMessage($update);
                 }
             }
-        } catch (\Throwable $exception) {
-            // Always acknowledge the webhook, but keep the complete exception in
-            // the application log. Telegram retries non-2xx responses and can
-            // deliver the same /start update repeatedly.
-            Log::error('Telegram Bot Error: ' . $exception->getMessage(), [
-                'trace' => $exception->getTraceAsString(),
-            ]);
+        } catch (\Exception $e) {
+            Log::error('Telegram Bot Error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
         }
         return response('ok', 200);
     }
@@ -655,9 +539,8 @@ class WebhookController extends BaseController
             return;
         }
 
-        $chatId = (int) $chat->getId();
+        $chatId = $chat->getId();
         $text = trim($message->getText() ?? '');
-        $isStartCommand = $text === '/start' || Str::startsWith($text, '/start ');
 
         // ═══════════════════════════════════════════════════════
         // Admin rejection reason flow (may not have a User record)
@@ -701,10 +584,8 @@ class WebhookController extends BaseController
                 return;
             }
 
-            $welcomeMessage = $this->getConfiguredBotMessage(
-                'welcome_message',
-                "🌟 خوش آمدید {$userFirstName} عزیز!\n\nبرای شروع، یکی از گزینه‌های منو را انتخاب کنید:"
-            );
+            $telegramSettings = TelegramBotSetting::pluck('value', 'key');
+            $welcomeMessage = $telegramSettings->get('welcome_message', "🌟 خوش آمدید {$userFirstName} عزیز!\n\nبرای شروع، یکی از گزینه‌های منو را انتخاب کنید:");
             $welcomeMessage = str_replace('{userFirstName}', $userFirstName, $welcomeMessage);
 
             if (Str::startsWith($text, '/start ')) {
@@ -730,15 +611,12 @@ class WebhookController extends BaseController
                 }
             }
 
-            $this->sendWelcomeMessage($chatId, $welcomeMessage);
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $welcomeMessage,
+                'reply_markup' => $this->getReplyMainMenu($chatId)
+            ]);
             return;
-        }
-
-        // /start is a fresh conversation entry point. Clear an interrupted
-        // purchase/import state instead of returning silently from the state
-        // handler below.
-        if ($isStartCommand && $user->bot_state !== null) {
-            $user->update(['bot_state' => null]);
         }
 
         if ($user->bot_state) {
@@ -759,15 +637,6 @@ class WebhookController extends BaseController
             elseif (Str::startsWith($user->bot_state, 'awaiting_admin_rejection_reason|')) {
                 $orderId = (int) Str::after($user->bot_state, 'awaiting_admin_rejection_reason|');
                 $this->processAdminRejectionReason($user, $orderId, $text);
-            } else {
-                // Do not silently discard messages when an old/deleted flow left
-                // an unknown state in the database.
-                Log::warning('Unknown Telegram bot state; resetting it.', [
-                    'user_id' => $user->id,
-                    'state' => $user->bot_state,
-                ]);
-                $user->update(['bot_state' => null]);
-                $this->sendOrEditMainMenu($chatId, 'لطفاً یکی از گزینه‌های منو را انتخاب کنید.');
             }
 
             return;
@@ -829,14 +698,21 @@ class WebhookController extends BaseController
 
 
             case '/start':
-                $startMessage = $this->getConfiguredBotMessage(
-                    'start_message',
-                    'سلام مجدد! لطفاً یک گزینه را انتخاب کنید:'
-                );
-                $this->sendWelcomeMessage($chatId, $startMessage);
+                $telegramSettings = TelegramBotSetting::pluck('value', 'key');
+                $startMessage = $telegramSettings->get('start_message', 'سلام مجدد! لطفاً یک گزینه را انتخاب کنید:');
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape($startMessage),
+                    'parse_mode' => 'MarkdownV2',
+                    'reply_markup' => $this->getReplyMainMenu($chatId)
+                ]);
                 break;
             default:
-                $this->sendWelcomeMessage($chatId, 'دستور شما نامفهوم است. لطفاً از دکمه‌های منو استفاده کنید.');
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => 'دستور شما نامفهوم است. لطفاً از دکمه‌های منو استفاده کنید.',
+                    'reply_markup' => $this->getReplyMainMenu($chatId)
+                ]);
                 break;
         }
     }
@@ -1340,7 +1216,11 @@ class WebhookController extends BaseController
         } else {
             switch ($data) {
                 case '/start':
-                    $this->sendWelcomeMessage($chatId, '🌟 منوی اصلی');
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => '🌟 منوی اصلی',
+                        'reply_markup' => $this->getReplyMainMenu($chatId)
+                    ]);
                     try { Telegram::deleteMessage(['chat_id' => $chatId, 'message_id' => $messageId]); } catch (\Exception $e) {}
                     break;
                 case '/import_subscription':
@@ -3843,7 +3723,7 @@ class WebhookController extends BaseController
         }
 
         try {
-            $botToken = $this->getConfiguredBotToken();
+            $botToken = $this->settings->get('telegram_bot_token');
             $apiUrl = "https://api.telegram.org/bot{$botToken}/getChatMember";
 
             $response = Http::timeout(10)->get($apiUrl, [
@@ -4025,7 +3905,7 @@ class WebhookController extends BaseController
         $photo = collect($photos)->last();
         if(!$photo) return null;
 
-        $botToken = $this->getConfiguredBotToken();
+        $botToken = $this->settings->get('telegram_bot_token');
         try {
             $file = Telegram::getFile(['file_id' => $photo->getFileId()]);
             $filePath = method_exists($file, 'getFilePath') ? $file->getFilePath() : ($file['file_path'] ?? null);
@@ -4923,15 +4803,11 @@ class WebhookController extends BaseController
     protected function sendOrEditMessage(int $chatId, string $text, $keyboard, ?int $messageId = null)
     {
         $payload = [
-            'chat_id'    => $chatId,
-            'text'       => $text,
-            'parse_mode' => 'MarkdownV2',
+            'chat_id'      => $chatId,
+            'text'         => $text,
+            'parse_mode'   => 'MarkdownV2',
+            'reply_markup' => $keyboard
         ];
-
-        if ($keyboard !== null) {
-            $payload['reply_markup'] = $keyboard;
-        }
-
         try {
             if ($messageId) {
                 $payload['message_id'] = $messageId;
@@ -4939,54 +4815,26 @@ class WebhookController extends BaseController
             } else {
                 Telegram::sendMessage($payload);
             }
-        } catch (\Throwable $exception) {
-            if (Str::contains($exception->getMessage(), ['message is not modified'])) {
-                Log::info('Message not modified.', ['chat_id' => $chatId]);
-                return;
+        } catch (\Telegram\Bot\Exceptions\TelegramResponseException $e) {
+            if (Str::contains($e->getMessage(), ['message is not modified'])) {
+                Log::info("Message not modified.", ['chat_id' => $chatId]);
+            } elseif (Str::contains($e->getMessage(), ['message to edit not found', 'message identifier is not specified'])) {
+                Log::warning("Could not edit message {$messageId}. Sending new.", ['error' => $e->getMessage()]);
+                unset($payload['message_id']);
+                try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after edit failure: " . $e2->getMessage());}
+            } else {
+                Log::error("Telegram API error: " . $e->getMessage(), ['payload' => $payload, 'trace' => $e->getTraceAsString()]);
+                if ($messageId) {
+                    unset($payload['message_id']);
+                    try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after API error: " . $e2->getMessage());}
+                }
             }
-
-            Log::error('Telegram API error while sending/editing message.', [
-                'chat_id' => $chatId,
-                'message_id' => $messageId,
-                'error' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString(),
-            ]);
-
-            // If editing failed, retry as a new message first while keeping
-            // the keyboard. If Telegram rejected the optional keyboard or
-            // Markdown formatting, the nested retries below remove those
-            // optional fields instead of making the bot appear unresponsive.
-            unset($payload['message_id']);
-            try {
-                Telegram::sendMessage($payload);
-            } catch (\Throwable $fallbackException) {
-                Log::error('Failed to send Telegram fallback message.', [
-                    'chat_id' => $chatId,
-                    'error' => $fallbackException->getMessage(),
-                ]);
-
-                unset($payload['reply_markup']);
-                try {
-                    Telegram::sendMessage($payload);
-                    return;
-                } catch (\Throwable $plainFallbackException) {
-                    Log::error('Failed to send Telegram fallback without keyboard.', [
-                        'chat_id' => $chatId,
-                        'error' => $plainFallbackException->getMessage(),
-                    ]);
-                }
-
-                // A custom message can also contain invalid MarkdownV2. The
-                // plain-text retry is the last safe attempt before returning.
-                unset($payload['parse_mode']);
-                try {
-                    Telegram::sendMessage($payload);
-                } catch (\Throwable $plainException) {
-                    Log::critical('Failed to send Telegram plain-text fallback message.', [
-                        'chat_id' => $chatId,
-                        'error' => $plainException->getMessage(),
-                    ]);
-                }
+        }
+        catch (\Exception $e) {
+            Log::error("General error during send/edit message: " . $e->getMessage(), ['chat_id' => $chatId, 'trace' => $e->getTraceAsString()]);
+            if($messageId) {
+                unset($payload['message_id']);
+                try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after general failure: " . $e2->getMessage());}
             }
         }
     }
@@ -5033,12 +4881,18 @@ class WebhookController extends BaseController
 
     protected function getReplyMainMenu($chatId = null): Keyboard
     {
-        $webAppUrl = $this->getPublicWebAppUrl();
+        try {
+            // ✅ استفاده از آدرس اصلی سایت به جای پنل نمایندگی
+            $webAppUrl = config('app.url');
+            $webAppUrl = trim($webAppUrl);
 
-        if (!$webAppUrl && config('app.url')) {
-            Log::notice('Skipping Telegram Mini App button because APP_URL is not a public HTTPS URL.', [
-                'app_url' => config('app.url'),
-            ]);
+            // اطمینان از HTTPS بودن لینک
+            if (str_starts_with($webAppUrl, 'http://')) {
+                $webAppUrl = str_replace('http://', 'https://', $webAppUrl);
+            }
+        } catch (\Exception $e) {
+            Log::warning('App URL not found', ['error' => $e->getMessage()]);
+            $webAppUrl = null;
         }
 
         // Read toggle settings (default to true/enabled)
@@ -5069,10 +4923,7 @@ class WebhookController extends BaseController
 
         if ($webAppUrl) {
             array_unshift($keyboard, [
-                Keyboard::button([
-                    'text' => '📱 مدیریت حساب (Mini App)',
-                    'web_app' => ['url' => $webAppUrl],
-                ]),
+                ['text' => '📱 مدیریت حساب (Mini App)', 'web_app' => ['url' => $webAppUrl]]
             ]);
         }
 
