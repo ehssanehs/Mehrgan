@@ -105,8 +105,7 @@ class SetTelegramWebhook extends Command
     private function normaliseBotToken(string $token): ?string
     {
         $token = trim($token);
-        $token = preg_replace('/^bot\s*/i', '', $token) ?? '';
-        $token = trim($token);
+        $token = preg_replace('/^bot/i', '', $token) ?? '';
 
         return preg_match('/^\d{5,}:[A-Za-z0-9_-]{20,}$/', $token) ? $token : null;
     }
