@@ -1,6 +1,6 @@
 <p align="center">
   <!-- لوگوی پروژه شما از پوشه github/github/logo.png -->
-  <img src="https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/github/github/logo.png" width="350" alt="VPNMarket Logo">
+  <img src="https://raw.githubusercontent.com/ehssanehs/VPNMarket/main/github/github/logo.png" width="350" alt="VPNMarket Logo">
 </p>
 
 <h1 align="center">VPNMarket - پنل مدیریت جامع و هوشمند مرزبان و X-UI</h1>
@@ -22,10 +22,10 @@
 ## ✨ نمایی از محیط پنل
 
 <p align="center">
-   <img src="https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/github/github/panel1.PNG" width="45%" alt="داشبورد اصلی">
-  <img src="https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران">
+   <img src="https://raw.githubusercontent.com/ehssanehs/VPNMarket/main/github/github/panel1.PNG" width="45%" alt="داشبورد اصلی">
+  <img src="https://raw.githubusercontent.com/ehssanehs/VPNMarket/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران">
   <br>
-  <img src="https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور">
+  <img src="https://raw.githubusercontent.com/ehssanehs/VPNMarket/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور">
 </p>
 
 ## 🚀 ویژگی‌های کلیدی که عاشقشان خواهید شد
@@ -80,7 +80,7 @@
 وارد سرور خود شوید و دستور زیر را اجرا کنید. اسکریپت ما بقیه کارها را به صورت خودکار انجام می‌دهد!
 
 ```bash
-wget -O install.sh https://raw.githubusercontent.com/arvinvahed/VPNMarket/main/install.sh && sudo bash install.sh
+wget -O install.sh https://raw.githubusercontent.com/ehssanehs/VPNMarket/main/install.sh && sudo bash install.sh
 ```
 
 ## 🔄 نحوه آپدیت پروژه
