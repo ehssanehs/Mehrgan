@@ -3563,6 +3563,26 @@ class WebhookController extends BaseController
 
                 event(new TicketCreated($ticket));
 
+                // Notify admins about new ticket
+                try {
+                    $adminChatIds = getTelegramAdminChatIds($this->settings);
+                    if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
+                        Telegram::setAccessToken($botToken);
+                        $adminMsg = "🧾 *تیکت جدید از ربات تلگرام*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*موضوع:* " . $this->escape($ticket->subject) . "\n\n*متن پیام:*\n" . $this->escape($messageText);
+                        foreach ($adminChatIds as $adminChatId) {
+                            if ($adminChatId) {
+                                Telegram::sendMessage([
+                                    'chat_id' => $adminChatId,
+                                    'text' => $adminMsg,
+                                    'parse_mode' => 'MarkdownV2',
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to notify admins of new ticket: ' . $e->getMessage());
+                }
+
             } elseif (Str::startsWith($state, 'awaiting_ticket_reply|')) {
                 $ticketId = (int) Str::after($state, 'awaiting_ticket_reply|');
                 $ticket = $user->tickets()->find($ticketId);
@@ -3593,6 +3613,26 @@ class WebhookController extends BaseController
                 $this->sendOrEditMainMenu($chatId, "پشتیبانی به زودی پاسخ شما را خواهد داد.");
 
                 event(new TicketReplied($reply));
+
+                // Notify admins about ticket reply
+                try {
+                    $adminChatIds = getTelegramAdminChatIds($this->settings);
+                    if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
+                        Telegram::setAccessToken($botToken);
+                        $adminMsg = "💬 *پاسخ جدید به تیکت #{$ticket->id}*\n\n*کاربر:* " . $this->escape($user->name) . " (ID: `{$user->id}`)\n*متن پاسخ:*\n" . $this->escape($messageText);
+                        foreach ($adminChatIds as $adminChatId) {
+                            if ($adminChatId) {
+                                Telegram::sendMessage([
+                                    'chat_id' => $adminChatId,
+                                    'text' => $adminMsg,
+                                    'parse_mode' => 'MarkdownV2',
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Failed to notify admins of ticket reply: ' . $e->getMessage());
+                }
             }
         } catch (\Exception $e) {
             Log::error('Failed to process ticket conversation: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
