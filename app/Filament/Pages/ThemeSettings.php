@@ -50,17 +50,23 @@ class ThemeSettings extends Page implements HasForms
             }
             // Convert telegram_admin_chat_id to array for TagsInput
             if ($key === 'telegram_admin_chat_id' && $value !== null) {
-                $decoded = json_decode($value, true);
-                if (is_array($decoded)) {
+                $decoded = Setting::decodeArrayValue($value);
+                if (! empty($decoded)) {
                     $settings[$key] = $decoded;
                 } elseif (is_numeric($value)) {
                     // Old single-value format — wrap in array
                     $settings[$key] = [$value];
                 } else {
                     // Unknown format — try splitting by comma
-                    $parts = preg_split('/[,\s،]+/', $value, -1, PREG_SPLIT_NO_EMPTY);
+                    $parts = preg_split('/[,\s،]+/', (string) $value, -1, PREG_SPLIT_NO_EMPTY);
                     $settings[$key] = !empty($parts) ? $parts : [];
                 }
+            }
+
+            // Convert multi-card JSON (including accidentally double-encoded values)
+            // to an array before passing it to the Filament Repeater.
+            if ($key === 'payment_cards' && $value !== null) {
+                $settings[$key] = Setting::decodeArrayValue($value);
             }
         }
 

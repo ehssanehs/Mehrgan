@@ -55,9 +55,9 @@ if (!function_exists('getTelegramAdminChatIds')) {
             return [];
         }
 
-        // New format: JSON array
-        $decoded = json_decode($raw, true);
-        if (is_array($decoded)) {
+        // New format: JSON array. Also handles accidentally double-encoded arrays.
+        $decoded = Setting::decodeArrayValue($raw);
+        if (! empty($decoded)) {
             return array_filter(array_map('strval', $decoded));
         }
 
@@ -67,7 +67,7 @@ if (!function_exists('getTelegramAdminChatIds')) {
         }
 
         // Fallback: comma/space separated
-        $parts = preg_split('/[,\s،]+/', $raw, -1, PREG_SPLIT_NO_EMPTY);
+        $parts = preg_split('/[,\s،]+/', (string) $raw, -1, PREG_SPLIT_NO_EMPTY);
         return !empty($parts) ? array_map('trim', $parts) : [];
     }
 }
