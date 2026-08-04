@@ -292,6 +292,7 @@ class SubscriptionImportService
                 'server_id' => $serverId,
                 'status' => 'paid',
                 'source' => $source,
+                'payment_method' => 'imported',
                 'config_details' => $configDetails,
                 'expires_at' => $expiresAt,
                 'panel_username' => $panelUsername,

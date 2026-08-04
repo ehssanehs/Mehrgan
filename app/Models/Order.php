@@ -94,6 +94,34 @@ class Order extends Model
                 'user_id' => $order->user_id
             ]);
         });
+
+        static::saving(function ($order) {
+            if (empty($order->server_id) && !empty($order->plan_id) && class_exists('Modules\MultiServer\Models\Server')) {
+                $plan = \App\Models\Plan::find($order->plan_id);
+                $serverType = $plan ? ($plan->server_type ?? 'all') : 'all';
+
+                $query = \Modules\MultiServer\Models\Server::where('is_active', true)
+                    ->whereRaw('current_users < capacity');
+                if ($serverType !== 'all') {
+                    $query->where('type', $serverType);
+                }
+                $bestServer = $query->orderBy('current_users', 'asc')->first()
+                    ?: \Modules\MultiServer\Models\Server::where('is_active', true)->whereRaw('current_users < capacity')->orderBy('current_users', 'asc')->first()
+                    ?: \Modules\MultiServer\Models\Server::where('is_active', true)->first();
+
+                if ($bestServer) {
+                    $order->server_id = $bestServer->id;
+                }
+            }
+
+            if (empty($order->payment_method) && !empty($order->card_payment_receipt)) {
+                $order->payment_method = 'card';
+            }
+
+            if (empty($order->payment_method) && $order->status === 'paid') {
+                $order->payment_method = 'card';
+            }
+        });
     }
 
     public function transactions()
