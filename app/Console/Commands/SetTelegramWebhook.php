@@ -26,60 +26,98 @@ class SetTelegramWebhook extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): int
     {
         $this->info('Attempting to set Telegram webhook...');
         Log::info('Running telegram:set-webhook command...');
 
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $botToken = $this->normaliseBotToken(
+            (string) Setting::where('key', 'telegram_bot_token')->value('value')
+        );
 
-        $appUrl = config('app.url');
-
-
-        $botToken = Setting::where('key', 'telegram_bot_token')->value('value');
-
-
-        if (!$appUrl || $appUrl === 'http://localhost') {
-            $errorMessage = 'Error: APP_URL is not set correctly in your .env file. It should be your public domain (e.g., https://yourdomain.com).';
+        if (! $this->isPublicHttpsUrl($appUrl)) {
+            $errorMessage = 'Error: APP_URL must be a public HTTPS URL (for example, https://yourdomain.com). Telegram cannot deliver webhooks to localhost or HTTP URLs.';
             $this->error($errorMessage);
-            Log::error($errorMessage);
-            return 1;
+            Log::error($errorMessage, ['app_url' => $appUrl]);
+
+            return self::FAILURE;
         }
 
-        if (!$botToken) {
-            $errorMessage = 'Error: TELEGRAM_BOT_TOKEN is not set in your site settings.';
+        if (! $botToken) {
+            $errorMessage = 'Error: the Telegram bot token is missing or invalid. Enter the token from BotFather in Site Settings and try again.';
             $this->error($errorMessage);
-            $this->warn('Please configure the bot token in your Filament admin panel first.');
+            $this->warn('Paste only the token (for example, 123456:ABC...), not a Bot API URL or the word "bot".');
             Log::error($errorMessage);
-            return 1;
+
+            return self::FAILURE;
         }
 
-        // ۴. ساخت URL وب‌هوک
-        $webhookUrl = rtrim($appUrl, '/') . '/webhooks/telegram';
-        $telegramApiUrl = "https://api.telegram.org/bot{$botToken}/setWebhook?url={$webhookUrl}";
+        $webhookUrl = $appUrl.'/webhooks/telegram';
+        // Do not put the webhook URL in a query string. Posting form data lets the
+        // HTTP client correctly encode every valid URL, including URLs with paths.
+        $telegramApiUrl = "https://api.telegram.org/bot{$botToken}/setWebhook";
 
-        $this->line("Setting webhook to: " . $webhookUrl);
-        Log::info("Attempting to set webhook to: " . $webhookUrl);
+        $this->line("Setting webhook to: {$webhookUrl}");
+        Log::info('Attempting to set Telegram webhook.', ['webhook_url' => $webhookUrl]);
 
-        // ۵. ارسال درخواست به تلگرام
         try {
-            $response = Http::get($telegramApiUrl);
+            $response = Http::asForm()
+                ->acceptJson()
+                ->timeout(15)
+                ->post($telegramApiUrl, ['url' => $webhookUrl]);
 
             if ($response->successful() && $response->json('ok') === true) {
-                $successMessage = '✅ Webhook set successfully! Description: ' . $response->json('description');
+                $successMessage = 'Webhook set successfully! Description: '.$response->json('description');
                 $this->info($successMessage);
-                Log::info($successMessage);
-            } else {
-                $errorMessage = '❌ Failed to set webhook. Reason: ' . ($response->json('description') ?? 'Unknown error');
-                $this->error($errorMessage);
-                Log::error($errorMessage, $response->json() ?? []);
+                Log::info($successMessage, ['webhook_url' => $webhookUrl]);
+
+                return self::SUCCESS;
             }
-        } catch (\Exception $e) {
-            $errorMessage = 'An exception occurred while trying to connect to the Telegram API: ' . $e->getMessage();
+
+            $reason = $response->json('description') ?: $response->body() ?: 'Unknown error';
+            $errorMessage = "Failed to set webhook (HTTP {$response->status()}). Reason: {$reason}";
             $this->error($errorMessage);
-            Log::critical($errorMessage);
+            Log::error($errorMessage, [
+                'webhook_url' => $webhookUrl,
+                'telegram_error_code' => $response->json('error_code'),
+            ]);
+
+            if ($response->status() === 404) {
+                $this->warn('Telegram returned “Not Found”. This normally means the bot token saved in Site Settings is no longer valid. Get the current token from BotFather, save it, clear Laravel’s config cache, and run this command again.');
+            }
+
+            return self::FAILURE;
+        } catch (\Throwable $exception) {
+            $errorMessage = 'Unable to connect to the Telegram API: '.$exception->getMessage();
+            $this->error($errorMessage);
+            Log::critical($errorMessage, ['webhook_url' => $webhookUrl]);
+
+            return self::FAILURE;
+        }
+    }
+
+    /**
+     * Accept a token copied from BotFather, with harmless surrounding whitespace.
+     * A few users paste "bot<token>" from an API URL; accepting that prefix avoids
+     * producing a misleading Telegram 404 while never logging the secret.
+     */
+    private function normaliseBotToken(string $token): ?string
+    {
+        $token = trim($token);
+        $token = preg_replace('/^bot/i', '', $token) ?? '';
+
+        return preg_match('/^\d{5,}:[A-Za-z0-9_-]{20,}$/', $token) ? $token : null;
+    }
+
+    private function isPublicHttpsUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+
+        if (($parts['scheme'] ?? null) !== 'https' || empty($parts['host'])) {
+            return false;
         }
 
-        return 0;
+        return ! in_array(strtolower($parts['host']), ['localhost', '127.0.0.1', '::1'], true);
     }
 }
-
