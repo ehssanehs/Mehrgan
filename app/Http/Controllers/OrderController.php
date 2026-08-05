@@ -12,6 +12,7 @@ use App\Models\Setting;
 use App\Models\Transaction;
 use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
+use App\Services\PasarGuardService;
 use App\Services\SubscriptionImportService;
 use App\Services\TelegramOrderNotificationService;
 use App\Services\XUIService;
@@ -331,6 +332,17 @@ class OrderController extends Controller
                     if ($marzbanService->getUser($customUsername)) {
                          return redirect()->back()->with('error', "نام کاربری '$customUsername' قبلاً در سرور انتخاب شده استفاده شده است. لطفاً نام دیگری انتخاب کنید.")->withInput();
                     }
+                } elseif ($server->type === 'pasarguard') {
+                    $pasarguardService = new PasarGuardService(
+                        $server->full_host,
+                        $server->username,
+                        $server->password,
+                        $server->pasarguard_node_hostname ?? ''
+                    );
+                    
+                    if ($pasarguardService->getUser($customUsername)) {
+                         return redirect()->back()->with('error', "نام کاربری '$customUsername' قبلاً در سرور انتخاب شده استفاده شده است. لطفاً نام دیگری انتخاب کنید.")->withInput();
+                    }
                 } elseif ($server->type === 'xui') {
                     $xuiService = new XUIService(
                         $server->full_host,
@@ -583,6 +595,46 @@ class OrderController extends Controller
                     } else {
                         Log::error('Marzban User Creation Failed', ['response' => $response]);
                         throw new \Exception('خطا در ایجاد کاربر در پنل مرزبان. لطفاً با پشتیبانی تماس بگیرید.');
+                    }
+                }
+
+                // ==========================================
+                // پنل PASARGUARD
+                // ==========================================
+                elseif ($panelType === 'pasarguard') {
+                    $pasarguardHost = $server ? $server->full_host : $settings->get('pasarguard_host');
+                    $pasarguardUser = $server ? $server->username : $settings->get('pasarguard_username');
+                    $pasarguardPass = $server ? $server->password : $settings->get('pasarguard_password');
+                    $nodeHostname = $server ? $server->pasarguard_node_hostname : $settings->get('pasarguard_node_hostname');
+
+                    Log::info('Attempting PasarGuard Connection', [
+                        'host' => $pasarguardHost,
+                        'username' => $pasarguardUser,
+                        'server_id' => $server ? $server->id : 'global',
+                    ]);
+
+                    $pasarguardService = new PasarGuardService(
+                        $pasarguardHost ?? '',
+                        $pasarguardUser ?? '',
+                        $pasarguardPass ?? '',
+                        $nodeHostname ?? ''
+                    );
+
+                    $userData = [
+                        'expire' => $timestamp,
+                        'data_limit' => $plan->volume_gb * 1073741824
+                    ];
+
+                    $response = $isRenewal
+                        ? $pasarguardService->updateUser($uniqueUsername, $userData)
+                        : $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+
+                    if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
+                        $finalConfig = $pasarguardService->generateSubscriptionLink($response);
+                        $success = true;
+                    } else {
+                        Log::error('PasarGuard User Creation Failed', ['response' => $response]);
+                        throw new \Exception('خطا در ایجاد کاربر در پنل PasarGuard. لطفاً با پشتیبانی تماس بگیرید.');
                     }
                 }
 

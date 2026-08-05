@@ -7,6 +7,7 @@ use App\Models\Inbound;
 use App\Models\Plan;
 use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
+use App\Services\PasarGuardService;
 use App\Services\XUIService;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
@@ -68,7 +69,25 @@ trait ManagesServiceProvisioning
         $success = false;
 
         try {
-            if ($panelType === 'marzban') {
+            if ($panelType === 'pasarguard') {
+                $pasarguardService = new PasarGuardService($settings->get('pasarguard_host'), $settings->get('pasarguard_username'), $settings->get('pasarguard_password'), $settings->get('pasarguard_node_hostname'));
+
+                $userData = ['expire' => $newExpiresAt->getTimestamp(), 'data_limit' => $plan->data_limit_gb * 1024 * 1024 * 1024];
+
+                $response = $isRenewal
+                    ? $pasarguardService->updateUser($uniqueUsername, $userData)
+                    : $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+
+                if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
+                    $finalConfig = $pasarguardService->generateSubscriptionLink($response);
+                    $success = true;
+                } else {
+                    $error = $response['detail'] ?? 'پاسخ نامعتبر از PasarGuard.';
+                    $this->handleProvisioningError($error, $isTelegramContext, ['response' => $response]);
+                    return false;
+                }
+
+            } elseif ($panelType === 'marzban') {
                 $marzbanService = new MarzbanService($settings->get('marzban_host'), $settings->get('marzban_sudo_username'), $settings->get('marzban_sudo_password'), $settings->get('marzban_node_hostname'));
 
                 // مطمئن شوید مدل Plan ستون data_limit_gb را دارد (در کد شما volume_gb بود، من به data_limit_gb تغییر دادم)

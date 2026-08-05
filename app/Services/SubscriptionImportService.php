@@ -244,6 +244,31 @@ class SubscriptionImportService
                     'parsed_count' => count($parsedVlessUris),
                     'first_vless_uri' => $parsedVlessUris[0]['uri'] ?? null,
                 ];
+            } elseif ($type === 'pasarguard') {
+                // PasarGuard is similar to Marzban
+                $pasarguardUser = $panelResult['user'] ?? $panelResult['client'];
+                $panelUsername = $pasarguardUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
+
+                $expireTimestamp = $details['expire'] ?? ($pasarguardUser['expire'] ?? 0);
+                if ($expireTimestamp > 0) {
+                    $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
+                } else {
+                    $expiresAt = now()->addYear();
+                }
+
+                $totalTraffic = $details['data_limit'] ?? ($pasarguardUser['data_limit'] ?? 0);
+                $usedTraffic = $details['used_traffic'] ?? ($pasarguardUser['used_traffic'] ?? 0);
+
+                $importMeta = [
+                    'panel_type' => 'pasarguard',
+                    'username' => $panelUsername,
+                    'data_limit' => $totalTraffic,
+                    'used_traffic' => $usedTraffic,
+                    'status' => $details['status'] ?? 'active',
+                    'proxies' => $details['proxies'] ?? [],
+                    'original_config' => $originalConfig,
+                    'parsed_count' => count($parsedVlessUris),
+                ];
             } else { // marzban
                 $marzbanUser = $panelResult['user'] ?? $panelResult['client'];
                 $panelUsername = $marzbanUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
