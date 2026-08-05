@@ -52,6 +52,22 @@ class UserResource extends Resource
                     ->maxLength(255),
                 Forms\Components\Toggle::make('is_admin')
                     ->label('کاربر ادمین است؟'),
+
+                // 🚫 وضعیت مسدودی (فقط نمایشی)
+                Forms\Components\Section::make('🚫 وضعیت مسدودی')
+                    ->schema([
+                        Forms\Components\Placeholder::make('ban_status')
+                            ->label('وضعیت حساب')
+                            ->content(fn (?User $record) => $record && $record->isBanned()
+                                ? '🚫 مسدود شده' . ($record->ban_reason ? ' — دلیل: ' . $record->ban_reason : '')
+                                : '✅ فعال'),
+                        Forms\Components\Placeholder::make('banned_at_info')
+                            ->label('تاریخ مسدودی')
+                            ->content(fn (?User $record) => $record?->banned_at?->format('Y-m-d H:i') ?? '—'),
+                    ])
+                    ->columns(2)
+                    ->collapsible()
+                    ->collapsed(),
             ]);
     }
 
@@ -62,10 +78,29 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('name')->label('نام')->searchable(),
                 Tables\Columns\TextColumn::make('email')->label('ایمیل')->searchable(),
                 Tables\Columns\IconColumn::make('is_admin')->label('ادمین')->boolean(),
+                Tables\Columns\TextColumn::make('is_banned')
+                    ->label('وضعیت')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => $state ? '🚫 مسدود' : '✅ فعال')
+                    ->color(fn ($state) => $state ? 'danger' : 'success')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('ban_reason')
+                    ->label('دلیل مسدودی')
+                    ->limit(30)
+                    ->toggleable(isToggledHiddenByDefault: true),
+                Tables\Columns\TextColumn::make('banned_at')
+                    ->label('تاریخ مسدودی')
+                    ->dateTime('Y-m-d H:i')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 Tables\Columns\TextColumn::make('created_at')->label('تاریخ ثبت‌نام')->dateTime('Y-m-d')->sortable(),
             ])
             ->filters([
-                //
+                Tables\Filters\TernaryFilter::make('is_banned')
+                    ->label('مسدود شده')
+                    ->placeholder('همه')
+                    ->trueLabel('مسدود شده')
+                    ->falseLabel('فعال'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -330,10 +365,130 @@ class UserResource extends Resource
                     ->modalIcon('heroicon-o-exclamation-triangle')
                     ->modalIconColor('warning')
                     ->modalSubmitActionLabel('بله، اعمال شود'),
+
+                // ====================================================
+                // 🚫 اکشن مسدودسازی کاربر
+                // ====================================================
+                Action::make('ban_user')
+                    ->label('مسدودسازی')
+                    ->icon('heroicon-o-no-symbol')
+                    ->color('danger')
+                    ->modalHeading(fn (User $record) => 'مسدودسازی کاربر: ' . $record->name)
+                    ->modalDescription('با مسدودسازی، کاربر دیگر نمی‌تواند وارد سایت شود یا از ربات تلگرام استفاده کند.')
+                    ->modalSubmitActionLabel('مسدود شود')
+                    ->visible(fn (User $record): bool => ! $record->isBanned() && ! $record->is_admin && $record->id !== auth()->id())
+                    ->form([
+                        Textarea::make('ban_reason')
+                            ->label('دلیل مسدودی')
+                            ->required()
+                            ->rows(3)
+                            ->maxLength(500)
+                            ->placeholder('مثال: تخلف در استفاده از سرویس، نقض قوانین...'),
+                    ])
+                    ->action(function (User $record, array $data) {
+                        $record->ban($data['ban_reason'], auth()->id());
+
+                        // اطلاع‌رسانی به کاربر در تلگرام
+                        if ($record->telegram_chat_id) {
+                            $webhookController = new WebhookController();
+                            $webhookController->sendBanStatusMessage($record, $data['ban_reason'], true);
+                        }
+
+                        Notification::make()
+                            ->title('کاربر مسدود شد')
+                            ->body("کاربر {$record->name} با موفقیت مسدود شد.")
+                            ->success()
+                            ->send();
+                    }),
+
+                // ====================================================
+                // ✅ اکشن رفع مسدودی
+                // ====================================================
+                Action::make('unban_user')
+                    ->label('رفع مسدودی')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->modalHeading(fn (User $record) => 'رفع مسدودی کاربر: ' . $record->name)
+                    ->modalDescription('کاربر دوباره می‌تواند وارد سایت شود و از ربات تلگرام استفاده کند.')
+                    ->modalSubmitActionLabel('رفع مسدودی')
+                    ->requiresConfirmation()
+                    ->visible(fn (User $record): bool => $record->isBanned())
+                    ->action(function (User $record) {
+                        $record->unban();
+
+                        // اطلاع‌رسانی به کاربر در تلگرام
+                        if ($record->telegram_chat_id) {
+                            $webhookController = new WebhookController();
+                            $webhookController->sendBanStatusMessage($record, null, false);
+                        }
+
+                        Notification::make()
+                            ->title('مسدودی برداشته شد')
+                            ->body("مسدودی کاربر {$record->name} برداشته شد و دسترسی او فعال است.")
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+
+                    // 🚫 مسدودسازی گروهی
+                    Tables\Actions\BulkAction::make('bulk_ban')
+                        ->label('مسدودسازی انتخابی')
+                        ->icon('heroicon-o-no-symbol')
+                        ->color('danger')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (\Illuminate\Support\Collection $records) {
+                            $count = 0;
+                            $records
+                                ->reject(fn (User $record) => $record->is_admin || $record->id === auth()->id())
+                                ->each(function (User $record) use (&$count) {
+                                    $reason = 'مسدودسازی گروهی توسط ادمین';
+                                    $record->ban($reason, auth()->id());
+
+                                    if ($record->telegram_chat_id) {
+                                        $webhookController = new WebhookController();
+                                        $webhookController->sendBanStatusMessage($record, $reason, true);
+                                    }
+                                    $count++;
+                                });
+
+                            Notification::make()
+                                ->title('مسدودسازی گروهی')
+                                ->body("{$count} کاربر مسدود شدند.")
+                                ->success()
+                                ->send();
+                        }),
+
+                    // ✅ رفع مسدودی گروهی
+                    Tables\Actions\BulkAction::make('bulk_unban')
+                        ->label('رفع مسدودی انتخابی')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (\Illuminate\Support\Collection $records) {
+                            $count = 0;
+                            $records->each(function (User $record) use (&$count) {
+                                if ($record->isBanned()) {
+                                    $record->unban();
+
+                                    if ($record->telegram_chat_id) {
+                                        $webhookController = new WebhookController();
+                                        $webhookController->sendBanStatusMessage($record, null, false);
+                                    }
+                                    $count++;
+                                }
+                            });
+
+                            Notification::make()
+                                ->title('رفع مسدودی گروهی')
+                                ->body("مسدودی {$count} کاربر برداشته شد.")
+                                ->success()
+                                ->send();
+                        }),
                 ]),
             ]);
     }
