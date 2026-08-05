@@ -621,19 +621,60 @@ class WebhookController extends BaseController
             if (Str::startsWith($text, '/start ')) {
                 $referralCode = Str::after($text, '/start ');
                 $referrer = User::where('referral_code', $referralCode)->first();
+                $referralEnabled = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
-                if ($referrer && $referrer->id !== $user->id) {
+                if ($referrer && $referralEnabled && $referrer->id !== $user->id) {
                     $user->referrer_id = $referrer->id;
                     $user->save();
+
                     $welcomeGift = (int) $this->settings->get('referral_welcome_gift', 0);
                     if ($welcomeGift > 0) {
                         $user->increment('balance', $welcomeGift);
+                        $user->refresh();
+
+                        Transaction::create([
+                            'user_id' => $user->id,
+                            'amount' => $welcomeGift,
+                            'type' => Transaction::TYPE_DEPOSIT,
+                            'status' => Transaction::STATUS_COMPLETED,
+                            'description' => 'هدیه خوش‌آمدگویی دعوت از طرف ' . $referrer->name,
+                            'metadata' => [
+                                'referral_welcome_gift' => true,
+                                'referrer_id' => $referrer->id,
+                            ],
+                        ]);
+
                         $welcomeMessage .= "\n\n🎁 هدیه خوش‌آمدگویی: " . number_format($welcomeGift) . " تومان به کیف پول شما اضافه شد.";
+
+                        // Send custom welcome gift message to the new user
+                        if ($user->telegram_chat_id && filter_var($this->settings->get('referral_telegram_notify_referred', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                            $tpl = $this->settings->get('referral_telegram_welcome_gift_message');
+                            if ($tpl) {
+                                $giftMsg = str_replace(
+                                    ['{amount}', '{balance}'],
+                                    [number_format($welcomeGift), number_format($user->balance)],
+                                    $tpl
+                                );
+                                try {
+                                    Telegram::sendMessage([
+                                        'chat_id' => $user->telegram_chat_id,
+                                        'text' => $giftMsg,
+                                    ]);
+                                } catch (\Exception $e) {
+                                    Log::warning("Failed to send referral welcome gift notification: " . $e->getMessage());
+                                }
+                            }
+                        }
                     }
+
+                    // Notify referrer about the new join
                     if ($referrer->telegram_chat_id) {
-                        $referrerMessage = "👤 *خبر خوب!*\n\n" . $this->escape("کاربر جدیدی با نام «{$userFirstName}» با لینک دعوت شما به ربات پیوست.");
+                        $joinTpl = $this->settings->get('referral_telegram_referrer_join_message');
+                        $referrerMessage = $joinTpl
+                            ? str_replace(['{referral_name}'], [$userFirstName], $joinTpl)
+                            : "👤 خبر خوب!\n\nکاربر جدیدی با نام «{$userFirstName}» با لینک دعوت شما به ربات پیوست.";
                         try {
-                            Telegram::sendMessage(['chat_id' => $referrer->telegram_chat_id, 'text' => $referrerMessage, 'parse_mode' => 'MarkdownV2']);
+                            Telegram::sendMessage(['chat_id' => $referrer->telegram_chat_id, 'text' => $referrerMessage]);
                         } catch (\Exception $e) {
                             Log::error("Failed to send referral notification: " . $e->getMessage());
                         }
@@ -689,7 +730,16 @@ class WebhookController extends BaseController
                 $this->showSupportMenu($user);
                 break;
             case '🎁 دعوت از دوستان':
-                $this->sendReferralMenu($user);
+                if (!filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                    Telegram::sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => $this->escape("⚠️ سیستم دعوت از دوستان در حال حاضر غیرفعال است."),
+                        'parse_mode' => 'MarkdownV2',
+                        'reply_markup' => $this->getReplyMainMenu($chatId),
+                    ]);
+                } else {
+                    $this->sendReferralMenu($user);
+                }
                 break;
             case '📚 راهنمای اتصال':
                 $this->sendTutorialsMenu($chatId);
@@ -1344,7 +1394,18 @@ class WebhookController extends BaseController
                 case '/plans': $this->sendPlans($chatId, $messageId); break;
                 case '/my_services': $this->sendMyServices($user, $messageId); break;
                 case '/wallet': $this->sendWalletMenu($user, $messageId); break;
-                case '/referral': $this->sendReferralMenu($user, $messageId); break;
+                case '/referral':
+                    if (!filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                        Telegram::sendMessage([
+                            'chat_id' => $chatId,
+                            'text' => $this->escape("⚠️ سیستم دعوت از دوستان در حال حاضر غیرفعال است."),
+                            'parse_mode' => 'MarkdownV2',
+                            'reply_markup' => $this->getReplyMainMenu($chatId),
+                        ]);
+                    } else {
+                        $this->sendReferralMenu($user, $messageId);
+                    }
+                    break;
                 case '/support_menu': $this->showSupportMenu($user, $messageId); break;
                 case '/deposit': $this->showDepositOptions($user, $messageId); break;
                 case '/transactions': $this->sendTransactions($user, $messageId); break;
@@ -4160,12 +4221,32 @@ class WebhookController extends BaseController
         }
         
         $referralLink = "https://t.me/{$botUsername}?start={$referralCode}";
-        $referrerReward = number_format((int) $this->settings->get('referral_referrer_reward', 0));
+        $fixedReward = (int) $this->settings->get('referral_referrer_reward', 0);
+        $percentReward = (float) $this->settings->get('referral_referrer_reward_percent', 0);
+        $welcomeGift = (int) $this->settings->get('referral_welcome_gift', 0);
         $referralCount = $user->referrals()->count();
-        
-        $message = "🎁 *دعوت از دوستان*\n\n";
+
+        $rewardDescription = [];
+        if ($fixedReward > 0) {
+            $rewardDescription[] = number_format($fixedReward) . " تومان ";
+        }
+        if ($percentReward > 0) {
+            $rewardDescription[] = rtrim(rtrim(number_format($percentReward, 2), '0'), '.') . "% از مبلغ سفارش ";
+        }
+        if (empty($rewardDescription)) {
+            $rewardText = $this->escape("در حال حاضر پاداشی تعریف نشده است.");
+        } else {
+            $rewardText = "*" . implode("*" . $this->escape(" + ") . "*", array_map([$this, 'escape'], $rewardDescription)) . "*";
+        }
+
+        $message = "🎁 *" . $this->escape("دعوت از دوستان") . "*\n\n";
         $message .= $this->escape("با اشتراک‌گذاری لینک زیر، دوستان خود را به ربات دعوت کنید.") . "\n\n";
-        $message .= "💸 " . $this->escape("با هر خرید موفق دوستانتان، ") . "*".$this->escape("{$referrerReward} تومان")."* " . $this->escape("به کیف پول شما اضافه می‌شود.") . "\n\n";
+        if (!empty($rewardDescription)) {
+            $message .= "💸 " . $this->escape("با هر خرید موفق دوستانتان، ") . $rewardText . $this->escape(" به کیف پول شما اضافه می‌شود.") . "\n\n";
+        }
+        if ($welcomeGift > 0) {
+            $message .= "🎁 " . $this->escape("هدیه خوش‌آمدگویی برای دوست شما: ") . "*" . $this->escape(number_format($welcomeGift) . " تومان") . "*\n\n";
+        }
         $message .= "🔗 *" . $this->escape("لینک دعوت شما:") . "*\n`{$referralLink}`\n\n";
         $message .= "👥 " . $this->escape("تعداد دعوت‌های موفق شما: ") . "*".$this->escape("{$referralCount} نفر")."*";
         
@@ -5055,20 +5136,28 @@ class WebhookController extends BaseController
     protected function getMainMenuKeyboard(): Keyboard
     {
         $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+        $showReferral = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $keyboard = Keyboard::make()->inline()
             ->row([
                 Keyboard::inlineButton(['text' => '🛒 خرید سرویس', 'callback_data' => '/plans']),
                 Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services']),
-            ])
-            ->row([
+            ]);
+
+        if ($showReferral) {
+            $keyboard->row([
                 Keyboard::inlineButton(['text' => '💰 کیف پول', 'callback_data' => '/wallet']),
                 Keyboard::inlineButton(['text' => '🎁 دعوت از دوستان', 'callback_data' => '/referral']),
-            ])
-            ->row([
-                Keyboard::inlineButton(['text' => '📥 ورود اشتراک قبلی به ربات', 'callback_data' => '/import_subscription']),
-                Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
             ]);
+        } else {
+            $keyboard->row([
+                Keyboard::inlineButton(['text' => '💰 کیف پول', 'callback_data' => '/wallet']),
+            ]);
+        }
+        $keyboard->row([
+            Keyboard::inlineButton(['text' => '📥 ورود اشتراک قبلی به ربات', 'callback_data' => '/import_subscription']),
+            Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
+        ]);
 
         $keyboard->row([
             Keyboard::inlineButton(['text' => '❓ سوالات متداول', 'callback_data' => '/faq']),
@@ -5094,13 +5183,20 @@ class WebhookController extends BaseController
         // Mini App feature removed
         $showReseller = filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN);
         $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+        $showReferral = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $keyboard = [
             ['🛒 خرید سرویس', '🛠 سرویس‌های من'],
             ['💰 کیف پول', '📜 تاریخچه تراکنش‌ها'],
-            ['💬 پشتیبانی', '🎁 دعوت از دوستان'],
-            ['📚 راهنمای اتصال', '❓ سوالات متداول'],
         ];
+
+        if ($showReferral) {
+            $keyboard[] = ['💬 پشتیبانی', '🎁 دعوت از دوستان'];
+        } else {
+            $keyboard[] = ['💬 پشتیبانی'];
+        }
+
+        $keyboard[] = ['📚 راهنمای اتصال', '❓ سوالات متداول'];
 
         if ($showTrial) {
             $keyboard[] = ['🧪 اکانت تست'];
