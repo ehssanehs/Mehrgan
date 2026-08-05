@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/logo.png" width="320" alt="لوگوی مهرگان">
+  <img src="github/github/logo.png" width="320" alt="لوگوی مهرگان">
 </p>
 
 <h1 align="center">مهرگان (Mehrgan)</h1>
@@ -18,10 +18,10 @@
 > رابط کاربری پروژه و بیشتر بخش‌های پنل به‌صورت پیش‌فرض فارسی است.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel1.PNG" width="45%" alt="داشبورد مهرگان">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران مهرگان">
+  <img src="github/github/panel1.PNG" width="45%" alt="داشبورد مهرگان">
+  <img src="github/github/panel2.PNG" width="45%" alt="صفحه اصلی سایت مهرگان">
   <br>
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور مهرگان">
+  <img src="github/github/panel3.PNG" width="90%" alt="پلن‌ها و امکانات مهرگان">
 </p>
 
 ## فهرست مطالب
