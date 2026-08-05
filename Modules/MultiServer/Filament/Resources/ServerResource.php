@@ -25,7 +25,7 @@ class ServerResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('اطلاعات اتصال پنل')
-                    ->description('اطلاعات ورود به پنل سنایی/X-UI یا مرزبان سرور مقصد را وارد کنید.')
+                    ->description('اطلاعات ورود به پنل سنایی/X-UI، مرزبان یا PasarGuard سرور مقصد را وارد کنید.')
                     ->schema([
                         Forms\Components\Grid::make(2)->schema([
                             Forms\Components\Select::make('location_id')
@@ -44,6 +44,7 @@ class ServerResource extends Resource
                                 ->options([
                                     'xui' => 'X-UI / Sanaei',
                                     'marzban' => 'Marzban',
+                                    'pasarguard' => 'PasarGuard',
                                 ])
                                 ->default('xui')
                                 ->required()
@@ -96,6 +97,12 @@ class ServerResource extends Resource
                             ->placeholder('مثال: node1.example.com')
                             ->helperText('فقط در صورت نیاز به ساخت کاربر روی نود خاص (اختیاری)')
                             ->visible(fn (Forms\Get $get) => $get('type') === 'marzban'),
+
+                        Forms\Components\TextInput::make('pasarguard_node_hostname')
+                            ->label('هاست نیم نود PasarGuard (Node Hostname)')
+                            ->placeholder('مثال: node1.example.com')
+                            ->helperText('فقط در صورت نیاز به ساخت کاربر روی نود خاص (اختیاری)')
+                            ->visible(fn (Forms\Get $get) => $get('type') === 'pasarguard'),
 
                         // ====================================================
                         // 🚀 انتخاب هوشمند اینباند (روش جدید و تضمینی)
@@ -290,6 +297,7 @@ class ServerResource extends Resource
                     ->color(fn (string $state): string => match ($state) {
                         'xui' => 'primary',
                         'marzban' => 'warning',
+                        'pasarguard' => 'success',
                         default => 'gray',
                     })
                     ->sortable(),

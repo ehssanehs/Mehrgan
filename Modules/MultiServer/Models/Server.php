@@ -10,13 +10,14 @@ class Server extends Model
 
     protected $fillable = [
         'location_id',
-        'type', // xui, marzban
+        'type', // xui, marzban, pasarguard
         'name',
         'ip_address',
         'port',
         'username',
         'password',
         'marzban_node_hostname',
+        'pasarguard_node_hostname',
         'is_https',
         'path',
         'inbound_id',
@@ -76,9 +77,9 @@ class Server extends Model
 
         $path = $this->path ?? '/';
         
-        // Marzban might not use path in the same way, but usually it's root
-        if ($this->type === 'marzban') {
-             // Marzban usually doesn't have path prefix like X-UI might
+        // Marzban/PasarGuard might not use path in the same way, but usually it's root
+        if ($this->type === 'marzban' || $this->type === 'pasarguard') {
+             // These panels usually don't have path prefix like X-UI might
              $path = '/';
         }
 
@@ -93,5 +94,10 @@ class Server extends Model
     public function isXui(): bool
     {
         return $this->type === 'xui';
+    }
+
+    public function isPasarGuard(): bool
+    {
+        return $this->type === 'pasarguard';
     }
 }

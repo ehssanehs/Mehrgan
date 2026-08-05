@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Setting;
+use App\Services\PasarGuardService;
 use Illuminate\Support\Facades\Log;
 use Modules\MultiServer\Models\Server;
 
@@ -39,6 +40,11 @@ class PanelSearchService
                         }
                     } elseif ($server->type === 'marzban') {
                         $result = self::searchMarzbanServer($server, $uuid);
+                        if ($result) {
+                            return $result;
+                        }
+                    } elseif ($server->type === 'pasarguard') {
+                        $result = self::searchPasarGuardServer($server, $uuid);
                         if ($result) {
                             return $result;
                         }
@@ -79,6 +85,19 @@ class PanelSearchService
 
             if ($marzbanHost && $marzbanUser && $marzbanPass) {
                 $result = self::searchMarzbanLegacy($marzbanHost, $marzbanUser, $marzbanPass, $marzbanNode, $uuid);
+                if ($result) {
+                    return $result;
+                }
+            }
+
+            // Try PasarGuard legacy
+            $pasarguardHost = $settings->get('pasarguard_host');
+            $pasarguardUser = $settings->get('pasarguard_username');
+            $pasarguardPass = $settings->get('pasarguard_password');
+            $pasarguardNode = $settings->get('pasarguard_node_hostname');
+
+            if ($pasarguardHost && $pasarguardUser && $pasarguardPass) {
+                $result = self::searchPasarGuardLegacy($pasarguardHost, $pasarguardUser, $pasarguardPass, $pasarguardNode, $uuid);
                 if ($result) {
                     return $result;
                 }
@@ -289,6 +308,90 @@ class PanelSearchService
 
         return [
             'type' => 'marzban',
+            'server' => null,
+            'server_id' => null,
+            'user' => $foundUser,
+            'client' => $foundUser,
+            'inbound' => null,
+            'subscription_link' => $subscriptionLink,
+            'details' => $details,
+        ];
+    }
+
+    protected static function searchPasarGuardServer(Server $server, string $uuid): ?array
+    {
+        $host = $server->full_host;
+        $pasarguardService = new PasarGuardService(
+            $host,
+            $server->username,
+            $server->password,
+            $server->pasarguard_node_hostname ?? $host
+        );
+
+        if (!$pasarguardService->login()) {
+            Log::warning('PasarGuard login failed for server', [
+                'server_id' => $server->id,
+            ]);
+            return null;
+        }
+
+        $user = $pasarguardService->findUserByUuid($uuid);
+        if (!$user) {
+            return null;
+        }
+
+        $subscriptionLink = $pasarguardService->generateSubscriptionLink($user);
+
+        $details = [
+            'uuid' => $uuid,
+            'username' => $user['username'] ?? null,
+            'email' => $user['username'] ?? null,
+            'expire' => $user['expire'] ?? 0,
+            'data_limit' => $user['data_limit'] ?? 0,
+            'used_traffic' => $user['used_traffic'] ?? 0,
+            'status' => $user['status'] ?? 'active',
+            'proxies' => $user['proxies'] ?? [],
+            'inbounds' => $user['inbounds'] ?? [],
+            'subscription_url' => $user['subscription_url'] ?? null,
+        ];
+
+        return [
+            'type' => 'pasarguard',
+            'server' => $server,
+            'server_id' => $server->id,
+            'user' => $user,
+            'client' => $user, // for generic handling
+            'inbound' => null,
+            'subscription_link' => $subscriptionLink,
+            'details' => $details,
+        ];
+    }
+
+    protected static function searchPasarGuardLegacy(string $host, string $user, string $pass, ?string $nodeHostname, string $uuid): ?array
+    {
+        $service = new PasarGuardService($host, $user, $pass, $nodeHostname ?? $host);
+        if (!$service->login()) {
+            return null;
+        }
+
+        $foundUser = $service->findUserByUuid($uuid);
+        if (!$foundUser) {
+            return null;
+        }
+
+        $subscriptionLink = $service->generateSubscriptionLink($foundUser);
+
+        $details = [
+            'uuid' => $uuid,
+            'username' => $foundUser['username'] ?? null,
+            'expire' => $foundUser['expire'] ?? 0,
+            'data_limit' => $foundUser['data_limit'] ?? 0,
+            'used_traffic' => $foundUser['used_traffic'] ?? 0,
+            'status' => $foundUser['status'] ?? 'active',
+        ];
+
+        return [
+            'type' => 'pasarguard',
             'server' => null,
             'server_id' => null,
             'user' => $foundUser,

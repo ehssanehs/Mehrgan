@@ -11,6 +11,7 @@ class VpnServiceFactory
         return match ($server->type) {
             'marzban' => new MarzbanService(),
             'sanaei' => new SanaeiService(),
+            'pasarguard' => new PasarGuardService(),
             default => throw new \Exception("Unsupported server type: {$server->type}"),
         };
     }

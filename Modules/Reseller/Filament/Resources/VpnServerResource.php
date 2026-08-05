@@ -40,6 +40,7 @@ class VpnServerResource extends Resource
                             ->options([
                                 'sanaei' => 'سنایی (X-UI)',
                                 'marzban' => 'مرزبان',
+                                'pasarguard' => 'PasarGuard',
                             ])
                             ->required()
                             ->helperText('نوع پنل مدیریت سرور'),
@@ -130,10 +131,12 @@ class VpnServerResource extends Resource
                     ->colors([
                         'primary' => 'sanaei',
                         'success' => 'marzban',
+                        'warning' => 'pasarguard',
                     ])
                     ->formatStateUsing(fn (string $state): string => match ($state) {
                         'sanaei' => 'سنایی',
                         'marzban' => 'مرزبان',
+                        'pasarguard' => 'PasarGuard',
                         default => $state,
                     }),
                 Tables\Columns\TextColumn::make('ip_address')
@@ -170,6 +173,7 @@ class VpnServerResource extends Resource
                     ->options([
                         'sanaei' => 'سنایی',
                         'marzban' => 'مرزبان',
+                        'pasarguard' => 'PasarGuard',
                     ]),
                 Tables\Filters\TernaryFilter::make('is_active')
                     ->label('وضعیت فعال')
