@@ -1080,6 +1080,74 @@ class WebhookController extends BaseController
             return;
         }
 
+        // Admin reply to ticket (works even if the admin has no User record)
+        if (Str::startsWith($data, 'admin_reply_ticket_')) {
+            $ticketId = (int) Str::after($data, 'admin_reply_ticket_');
+            \Illuminate\Support\Facades\Cache::put("admin_reply_ticket_{$chatId}", ['ticket_id' => $ticketId, 'message_id' => $messageId], now()->addMinutes(30));
+            try {
+                Telegram::answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                    'text' => "لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید.",
+                    'show_alert' => false,
+                ]);
+            } catch (\Exception $e) {}
+            $keyboard = Keyboard::make()->inline()->row([
+                Keyboard::inlineButton([
+                    'text' => '❌ انصراف',
+                    'callback_data' => 'admin_reply_cancel',
+                ]),
+            ]);
+            $this->sendOrEditMessage($chatId, "✉️ لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):", $keyboard, $messageId);
+            return;
+        }
+
+        // Admin close ticket (works even if the admin has no User record)
+        if (Str::startsWith($data, 'admin_close_ticket_')) {
+            $ticketId = (int) Str::after($data, 'admin_close_ticket_');
+            $ticket = \Modules\Ticketing\Models\Ticket::find($ticketId);
+            if ($ticket && $ticket->status !== 'closed') {
+                $ticket->update(['status' => 'closed']);
+                try {
+                    Telegram::answerCallbackQuery([
+                        'callback_query_id' => $callbackQuery->getId(),
+                        'text' => "تیکت #{$ticketId} بسته شد.",
+                        'show_alert' => false,
+                    ]);
+                } catch (\Exception $e) {}
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape("✅ تیکت #{$ticketId} بسته شد."),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+            } else {
+                try {
+                    Telegram::answerCallbackQuery([
+                        'callback_query_id' => $callbackQuery->getId(),
+                        'text' => 'تیکت یافت نشد یا قبلاً بسته شده است.',
+                        'show_alert' => true,
+                    ]);
+                } catch (\Exception $e) {}
+            }
+            return;
+        }
+
+        // Admin cancel ticket reply (works even if the admin has no User record)
+        if ($data === 'admin_reply_cancel') {
+            \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+            try {
+                Telegram::answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                    'text' => 'عملیات پاسخ به تیکت لغو شد.',
+                ]);
+            } catch (\Exception $e) {}
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $this->escape('✅ عملیات پاسخ به تیکت لغو شد.'),
+                'parse_mode' => 'MarkdownV2',
+            ]);
+            return;
+        }
+
         $user = User::where('telegram_chat_id', $chatId)->first();
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
@@ -1230,68 +1298,6 @@ class WebhookController extends BaseController
             $ticketId = (int) Str::after($data, 'close_ticket_');
             $callbackQueryId = $callbackQuery ? $callbackQuery->getId() : null;
             $this->closeTicket($user, $ticketId, $messageId, $callbackQueryId);
-        }
-
-        elseif (Str::startsWith($data, 'admin_reply_ticket_')) {
-            $ticketId = (int) Str::after($data, 'admin_reply_ticket_');
-            \Illuminate\Support\Facades\Cache::put("admin_reply_ticket_{$chatId}", ['ticket_id' => $ticketId, 'message_id' => $messageId], now()->addMinutes(30));
-            try {
-                Telegram::answerCallbackQuery([
-                    'callback_query_id' => $callbackQuery->getId(),
-                    'text' => "لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید.",
-                    'show_alert' => false,
-                ]);
-            } catch (\Exception $e) {}
-            $keyboard = Keyboard::make()->inline()->row([
-                Keyboard::inlineButton([
-                    'text' => '❌ انصراف',
-                    'callback_data' => 'admin_reply_cancel',
-                ]),
-            ]);
-            $this->sendOrEditMessage($chatId, "✉️ لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):", $keyboard, $messageId);
-        }
-
-        elseif (Str::startsWith($data, 'admin_close_ticket_')) {
-            $ticketId = (int) Str::after($data, 'admin_close_ticket_');
-            $ticket = \Modules\Ticketing\Models\Ticket::find($ticketId);
-            if ($ticket && $ticket->status !== 'closed') {
-                $ticket->update(['status' => 'closed']);
-                try {
-                    Telegram::answerCallbackQuery([
-                        'callback_query_id' => $callbackQuery->getId(),
-                        'text' => "تیکت #{$ticketId} بسته شد.",
-                        'show_alert' => false,
-                    ]);
-                } catch (\Exception $e) {}
-                Telegram::sendMessage([
-                    'chat_id' => $chatId,
-                    'text' => $this->escape("✅ تیکت #{$ticketId} بسته شد."),
-                    'parse_mode' => 'MarkdownV2',
-                ]);
-            } else {
-                try {
-                    Telegram::answerCallbackQuery([
-                        'callback_query_id' => $callbackQuery->getId(),
-                        'text' => 'تیکت یافت نشد یا قبلاً بسته شده است.',
-                        'show_alert' => true,
-                    ]);
-                } catch (\Exception $e) {}
-            }
-        }
-
-        elseif ($data === 'admin_reply_cancel') {
-            \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
-            try {
-                Telegram::answerCallbackQuery([
-                    'callback_query_id' => $callbackQuery->getId(),
-                    'text' => 'عملیات پاسخ به تیکت لغو شد.',
-                ]);
-            } catch (\Exception $e) {}
-            Telegram::sendMessage([
-                'chat_id' => $chatId,
-                'text' => $this->escape('✅ عملیات پاسخ به تیکت لغو شد.'),
-                'parse_mode' => 'MarkdownV2',
-            ]);
         }
 
         elseif (Str::startsWith($data, 'agent_')) {
