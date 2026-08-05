@@ -4,13 +4,13 @@
             <div class="flex-1">
 
                 <a
-                    href="https://github.com/ehssanehs/vpn-market"
+                    href="https://github.com/ehssanehs/Mehrgan"
                     rel="noopener noreferrer"
                     target="_blank"
                     class="block text-xl font-bold text-gray-950 dark:text-white"
                 >
 
-                    VPNMarket Project
+                    Mehrgan Project
                 </a>
 
                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -22,7 +22,7 @@
 
                 <x-filament::link
                     color="gray"
-                    href="https://github.com/ehssanehs/vpn-market"
+                    href="https://github.com/ehssanehs/Mehrgan"
                     icon-alias="panels::widgets.filament-info.open-github-button"
                     rel="noopener noreferrer"
                     target="_blank"
@@ -48,7 +48,7 @@
 
                 <x-filament::link
                     color="gray"
-                    href="https://t.me/VPNMarket_OfficialSupport"
+                    href="https://t.me/Mehrgan_OfficialSupport"
                     icon="heroicon-m-users"
                     icon-alias="panels::widgets.filament-info.join-telegram-button"
                     rel="noopener noreferrer"

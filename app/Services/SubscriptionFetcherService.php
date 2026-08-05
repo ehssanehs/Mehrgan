@@ -59,7 +59,7 @@ class SubscriptionFetcherService
                 'connect_timeout' => 10,
             ])
                 ->withHeaders([
-                    'User-Agent' => 'VPNMarket-Importer/1.0',
+                    'User-Agent' => 'Mehrgan-Importer/1.0',
                     'Accept' => 'text/plain, */*',
                 ])
                 ->get($url);

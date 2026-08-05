@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ==================================================================================
-# ===    اسکریپت حذف یک نمونه از VPNMarket — بدون تأثیر بر نمونه‌های دیگر       ===
-# ===  استفاده: sudo bash uninstall.sh --slug=vpnmarket-1                        ===
+# ===    اسکریپت حذف یک نمونه از Mehrgan — بدون تأثیر بر نمونه‌های دیگر       ===
+# ===  استفاده: sudo bash uninstall.sh --slug=mehrgan-1                        ===
 # ===  یا:       sudo bash uninstall.sh  (حذف تعاملی با انتخاب نمونه)             ===
 # ==================================================================================
 
@@ -38,15 +38,15 @@ done
 
 echo
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  ${BOLD}حذف نمونه VPNMarket${NC}                                      ${CYAN}║${NC}"
+echo -e "${CYAN}║  ${BOLD}حذف نمونه Mehrgan${NC}                                      ${CYAN}║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
 echo
 
 # --- توابع مربوط به نمونه‌های نصب‌شده ---
-# نام پوشه در زمان نصب قابل تغییر است؛ بنابراین فقط پوشه‌های vpnmarket-* را
+# نام پوشه در زمان نصب قابل تغییر است؛ بنابراین فقط پوشه‌های mehrgan-* را
 # جست‌وجو نمی‌کنیم. امضای پروژه و remote گیت مانع نمایش پروژه‌های نامرتبط
 # موجود در /var/www می‌شوند.
-is_vpnmarket_instance() {
+is_mehrgan_instance() {
     local dir="$1"
     local slug app_name
 
@@ -57,25 +57,27 @@ is_vpnmarket_instance() {
     slug=$(basename "${dir%/}")
 
     # نمونه‌های ساخته‌شده توسط نسخه‌های قدیمی اسکریپت
-    if [[ "$slug" == "vpnmarket" || "$slug" == vpnmarket-* ]]; then
+    if [[ "$slug" == "mehrgan" || "$slug" == mehrgan-* ]]; then
         return 0
     fi
 
     # امضای سورس پروژه (برای نمونه‌هایی که نام پوشه سفارشی دارند)
-    if [ -f "$dir/app/Filament/Widgets/VpnMarketInfoWidget.php" ] || \
-       [ -f "$dir/.vpnmarket-instance" ]; then
+    if [ -f "$dir/app/Filament/Widgets/MehrganInfoWidget.php" ] || \
+       [ -f "$dir/.mehrgan-instance" ]; then
         return 0
     fi
 
     # git ممکن است به دلیل safe.directory قابل اجرا نباشد؛ config را مستقیم می‌خوانیم.
+    # هر دو remote قدیمی (vpn-market) و جدید (Mehrgan) شناسایی می‌شوند
+    # تا نمونه‌های نصب‌شده قبل از تغییر نام نیز قابل حذف بمانند.
     if [ -f "$dir/.git/config" ] && \
-       grep -Eiq 'ehssanehs[/:]vpn-market(\.git)?([[:space:]]|$)' "$dir/.git/config"; then
+       grep -Eiq 'ehssanehs[/:](vpn-market|Mehrgan)(\.git)?([[:space:]]|$)' "$dir/.git/config"; then
         return 0
     fi
 
     # سازگاری با نصب‌های قدیمی یا کمینه که فایل امضای بالا را ندارند
     app_name=$(read_env_value "$dir/.env" "APP_NAME")
-    [[ "${app_name,,}" == vpnmarket* ]]
+    [[ "${app_name,,}" == mehrgan* ]]
 }
 
 find_instances() {
@@ -85,7 +87,7 @@ find_instances() {
     # چاپ مستقیم هر نتیجه باعث می‌شود در حالت خالی هیچ خط ساختگی (گزینه «1»)
     # تولید نشود.
     for dir in /var/www/*/; do
-        if is_vpnmarket_instance "$dir"; then
+        if is_mehrgan_instance "$dir"; then
             basename "${dir%/}"
         fi
     done
@@ -153,7 +155,7 @@ fi
 
 # --- حذف تمام نمونه‌ها ---
 if [ "${UNINSTALL_ALL:-false}" = true ]; then
-    echo -e "${RED}⚠️  حذف تمام نمونه‌های VPNMarket!${NC}"
+    echo -e "${RED}⚠️  حذف تمام نمونه‌های Mehrgan!${NC}"
     if [ "$FORCE" != true ]; then
         read -p "آیا مطمئن هستید؟ (y/n): " CONFIRM
         [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]] && echo -e "${YELLOW}لغو شد.${NC}" && exit 0
