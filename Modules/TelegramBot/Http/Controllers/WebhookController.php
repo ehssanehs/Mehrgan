@@ -520,6 +520,76 @@ class WebhookController extends BaseController
             return;
         }
 
+        // ═══════════════════════════════════════════════════════
+        // Admin reply to ticket flow (may not have a User record)
+        // ═══════════════════════════════════════════════════════
+        $pendingAdminReply = \Illuminate\Support\Facades\Cache::get("admin_reply_ticket_{$chatId}");
+        if ($pendingAdminReply) {
+            if ($text === '/cancel_action') {
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('✅ عملیات پاسخ به تیکت لغو شد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                return;
+            }
+
+            $isPhotoOnly = $message->has('photo') && (empty(trim($text)) || $text === '[📎 فایل پیوست شد]');
+            $messageText = $isPhotoOnly ? '[📎 پیوست تصویر]' : $text;
+
+            if (empty(trim($messageText))) {
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('❌ متن پاسخ نمی‌تواند خالی باشد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                return;
+            }
+
+            $ticketId = $pendingAdminReply['ticket_id'];
+            $ticket = \Modules\Ticketing\Models\Ticket::find($ticketId);
+            if ($ticket) {
+                $user = User::where('telegram_chat_id', $chatId)->first();
+                if (!$user) {
+                    $from = $message->getFrom();
+                    $userFirstName = $from ? $from->getFirstName() ?? 'ادمین' : 'ادمین';
+                    $user = User::create([
+                        'name' => $userFirstName,
+                        'email' => $chatId . '@telegram.admin',
+                        'password' => Hash::make(Str::random(10)),
+                        'telegram_chat_id' => $chatId,
+                        'referral_code' => Str::random(8),
+                        'is_admin' => true,
+                    ]);
+                }
+
+                $replyData = ['user_id' => $user->id, 'message' => $messageText];
+                if ($message->has('photo')) {
+                    try { $replyData['attachment_path'] = $this->savePhotoAttachment($update, 'ticket_attachments'); }
+                    catch (\Exception $e) { Log::error("Error saving photo for admin reply {$ticketId}: " . $e->getMessage()); }
+                }
+                $reply = $ticket->replies()->create($replyData);
+                $ticket->update(['status' => 'answered']);
+
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape("✅ پاسخ شما برای تیکت #{$ticketId} ثبت شد."),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                event(new \Modules\Ticketing\Events\TicketReplied($reply));
+            } else {
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('❌ تیکت مورد نظر یافت نشد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+            }
+            return;
+        }
+
         $user = User::where('telegram_chat_id', $chatId)->first();
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
@@ -1162,6 +1232,68 @@ class WebhookController extends BaseController
             $this->closeTicket($user, $ticketId, $messageId, $callbackQueryId);
         }
 
+        elseif (Str::startsWith($data, 'admin_reply_ticket_')) {
+            $ticketId = (int) Str::after($data, 'admin_reply_ticket_');
+            \Illuminate\Support\Facades\Cache::put("admin_reply_ticket_{$chatId}", ['ticket_id' => $ticketId, 'message_id' => $messageId], now()->addMinutes(30));
+            try {
+                Telegram::answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                    'text' => "لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید.",
+                    'show_alert' => false,
+                ]);
+            } catch (\Exception $e) {}
+            $keyboard = Keyboard::make()->inline()->row([
+                Keyboard::inlineButton([
+                    'text' => '❌ انصراف',
+                    'callback_data' => 'admin_reply_cancel',
+                ]),
+            ]);
+            $this->sendOrEditMessage($chatId, "✉️ لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):", $keyboard, $messageId);
+        }
+
+        elseif (Str::startsWith($data, 'admin_close_ticket_')) {
+            $ticketId = (int) Str::after($data, 'admin_close_ticket_');
+            $ticket = \Modules\Ticketing\Models\Ticket::find($ticketId);
+            if ($ticket && $ticket->status !== 'closed') {
+                $ticket->update(['status' => 'closed']);
+                try {
+                    Telegram::answerCallbackQuery([
+                        'callback_query_id' => $callbackQuery->getId(),
+                        'text' => "تیکت #{$ticketId} بسته شد.",
+                        'show_alert' => false,
+                    ]);
+                } catch (\Exception $e) {}
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape("✅ تیکت #{$ticketId} بسته شد."),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+            } else {
+                try {
+                    Telegram::answerCallbackQuery([
+                        'callback_query_id' => $callbackQuery->getId(),
+                        'text' => 'تیکت یافت نشد یا قبلاً بسته شده است.',
+                        'show_alert' => true,
+                    ]);
+                } catch (\Exception $e) {}
+            }
+        }
+
+        elseif ($data === 'admin_reply_cancel') {
+            \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+            try {
+                Telegram::answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                    'text' => 'عملیات پاسخ به تیکت لغو شد.',
+                ]);
+            } catch (\Exception $e) {}
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $this->escape('✅ عملیات پاسخ به تیکت لغو شد.'),
+                'parse_mode' => 'MarkdownV2',
+            ]);
+        }
+
         elseif (Str::startsWith($data, 'agent_')) {
             $this->handleAgentCallbacks($user, $data, $messageId);
         }
@@ -1617,6 +1749,78 @@ class WebhookController extends BaseController
         }
         
         $chatId = $chat->getId();
+
+        // ═══════════════════════════════════════════════════════
+        // Admin reply to ticket flow (may not have a User record)
+        // ═══════════════════════════════════════════════════════
+        $pendingAdminReply = \Illuminate\Support\Facades\Cache::get("admin_reply_ticket_{$chatId}");
+        if ($pendingAdminReply) {
+            $messageText = $message->getCaption() ?? '[📎 فایل پیوست شد]';
+            $isPhotoOnly = $message->has('photo') && (empty(trim($messageText)) || $messageText === '[📎 فایل پیوست شد]');
+            $messageText = $isPhotoOnly ? '[📎 پیوست تصویر]' : $messageText;
+
+            if ($messageText === '/cancel_action') {
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('✅ عملیات پاسخ به تیکت لغو شد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                return;
+            }
+
+            if (empty(trim($messageText))) {
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('❌ متن پاسخ نمی‌تواند خالی باشد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                return;
+            }
+
+            $ticketId = $pendingAdminReply['ticket_id'];
+            $ticket = \Modules\Ticketing\Models\Ticket::find($ticketId);
+            if ($ticket) {
+                $user = User::where('telegram_chat_id', $chatId)->first();
+                if (!$user) {
+                    $from = $message->getFrom();
+                    $userFirstName = $from ? $from->getFirstName() ?? 'ادمین' : 'ادمین';
+                    $user = User::create([
+                        'name' => $userFirstName,
+                        'email' => $chatId . '@telegram.admin',
+                        'password' => Hash::make(Str::random(10)),
+                        'telegram_chat_id' => $chatId,
+                        'referral_code' => Str::random(8),
+                        'is_admin' => true,
+                    ]);
+                }
+
+                $replyData = ['user_id' => $user->id, 'message' => $messageText];
+                if ($message->has('photo')) {
+                    try { $replyData['attachment_path'] = $this->savePhotoAttachment($update, 'ticket_attachments'); }
+                    catch (\Exception $e) { Log::error("Error saving photo for admin reply {$ticketId}: " . $e->getMessage()); }
+                }
+                $reply = $ticket->replies()->create($replyData);
+                $ticket->update(['status' => 'answered']);
+
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape("✅ پاسخ شما برای تیکت #{$ticketId} ثبت شد."),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                event(new \Modules\Ticketing\Events\TicketReplied($reply));
+            } else {
+                Telegram::sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $this->escape('❌ تیکت مورد نظر یافت نشد.'),
+                    'parse_mode' => 'MarkdownV2',
+                ]);
+                \Illuminate\Support\Facades\Cache::forget("admin_reply_ticket_{$chatId}");
+            }
+            return;
+        }
+
         $user = User::where('telegram_chat_id', $chatId)->first();
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
@@ -3575,12 +3779,23 @@ class WebhookController extends BaseController
                         $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
                         $adminMsg .= "*موضوع:* " . $this->escape($ticket->subject) . "\n\n";
                         $adminMsg .= "*متن پیام:*\n" . $this->escape($messageText);
+                        $adminKeyboard = Keyboard::make()->inline()->row([
+                            Keyboard::inlineButton([
+                                'text' => '✉️ پاسخ به تیکت',
+                                'callback_data' => "admin_reply_ticket_{$ticket->id}",
+                            ]),
+                            Keyboard::inlineButton([
+                                'text' => '❌ بستن تیکت',
+                                'callback_data' => "admin_close_ticket_{$ticket->id}",
+                            ]),
+                        ]);
                         foreach ($adminChatIds as $adminChatId) {
                             if ($adminChatId) {
                                 Telegram::sendMessage([
                                     'chat_id' => $adminChatId,
                                     'text' => $adminMsg,
                                     'parse_mode' => 'MarkdownV2',
+                                    'reply_markup' => $adminKeyboard,
                                 ]);
                             }
                         }
@@ -3628,12 +3843,23 @@ class WebhookController extends BaseController
                         $adminMsg = "💬 *پاسخ جدید به تیکت " . $this->escape("#{$ticket->id}") . "*\n\n";
                         $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
                         $adminMsg .= "*متن پاسخ:*\n" . $this->escape($messageText);
+                        $adminKeyboard = Keyboard::make()->inline()->row([
+                            Keyboard::inlineButton([
+                                'text' => '✉️ پاسخ به تیکت',
+                                'callback_data' => "admin_reply_ticket_{$ticket->id}",
+                            ]),
+                            Keyboard::inlineButton([
+                                'text' => '❌ بستن تیکت',
+                                'callback_data' => "admin_close_ticket_{$ticket->id}",
+                            ]),
+                        ]);
                         foreach ($adminChatIds as $adminChatId) {
                             if ($adminChatId) {
                                 Telegram::sendMessage([
                                     'chat_id' => $adminChatId,
                                     'text' => $adminMsg,
                                     'parse_mode' => 'MarkdownV2',
+                                    'reply_markup' => $adminKeyboard,
                                 ]);
                             }
                         }
