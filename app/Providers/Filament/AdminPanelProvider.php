@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Widgets\VpnMarketInfoWidget;
+use App\Support\SiteTheme;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
@@ -10,6 +11,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets;
 use Filament\FontProviders\LocalFontProvider;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -25,24 +27,33 @@ class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
+        // قالب انتخاب‌شده سایت (از تنظیمات) تا روی پنل مدیریت هم اعمال شود.
+        $isDarkSiteTheme = SiteTheme::isDark();
+
         // تنظیمات اصلی پنل
         $panel
             ->default()
             ->id('admin')
             ->path('admin')
             ->login()
-            ->colors([
-                'primary' => '#7C3AED',
-                'gray' => Color::Slate,
+            // رنگ‌های پنل مدیریت از قالب فعال سایت گرفته می‌شوند.
+            ->colors(fn (): array => array_merge([
                 'danger' => Color::Rose,
                 'info' => Color::Sky,
                 'success' => Color::Emerald,
                 'warning' => Color::Amber,
-            ])
+            ], SiteTheme::filamentColors()))
+            // حالت روشن/تاریک پنل مدیریت مطابق قالب سایت قفل می‌شود.
+            ->darkMode($isDarkSiteTheme, isForced: $isDarkSiteTheme)
             ->font(
                 'Vaz',
                 url: asset('css/font.css'),
                 provider: LocalFontProvider::class,
+            )
+            // اعمال پس‌زمینه و color-scheme قالب فعال سایت روی پنل مدیریت.
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn (): \Illuminate\Support\HtmlString => SiteTheme::adminPanelHeadHtml(),
             )
 
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')

@@ -86,7 +86,8 @@ class ThemeSettings extends Page implements HasForms
 
         $this->form->fill(array_merge([
             'panel_type' => 'marzban',
-            // The selected site theme is shared by public, authentication, and customer pages.
+            // The selected site theme is shared by public, authentication, and
+            // customer pages, and is also applied to the admin web panel.
             'active_theme' => 'arcane',
             'xui_host' => null,
             'xui_user' => null,
@@ -120,7 +121,9 @@ class ThemeSettings extends Page implements HasForms
                                 'nebula' => 'قالب Nebula (کهکشانی)',
                                 'aurora' => 'قالب Aurora (روشن)',
                                 'obsidian' => 'قالب Obsidian (طلایی)',
-                            ])->default('arcane')->live(),
+                            ])->default('arcane')
+                                ->helperText('قالب انتخاب‌شده روی صفحات سایت، صفحات ورود و پنل مدیریت اعمال می‌شود.')
+                                ->live(),
                         ]),
 
                     Tabs\Tab::make('محتوای قالب RoketVPN (موشکی)')

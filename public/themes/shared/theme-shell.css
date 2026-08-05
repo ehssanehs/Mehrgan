@@ -35,3 +35,103 @@
 .theme-shell .border-gray-100, .theme-shell .border-gray-200, .theme-shell .dark\:border-gray-700 { border-color:var(--app-border) !important; }
 .theme-shell .bg-indigo-600, .theme-shell .bg-blue-500 { background-color:var(--app-accent) !important; color:var(--app-bg) !important; }
 .theme-shell .text-indigo-600, .theme-shell .text-indigo-500, .theme-shell .dark\:text-indigo-400 { color:var(--app-accent) !important; }
+
+/*
+ * Extended remaps.
+ * The dashboard and other customer pages still contain sections built with
+ * plain gray Tailwind utilities (cards like `bg-gray-50 dark:bg-gray-800/50`).
+ * Without these remaps such sections stay light-gray ("gray squares") while
+ * the text inside them is forced to the light theme text color, making it
+ * unreadable on dark themes. Map every remaining gray utility onto the active
+ * theme palette so text is always readable.
+ */
+
+/* Solid gray surfaces -> theme surface */
+.theme-shell .bg-gray-50,
+.theme-shell .bg-gray-800,
+.theme-shell .bg-gray-900,
+.theme-shell .bg-white\/70,
+.theme-shell .dark\:bg-gray-900\/70 { background-color:var(--app-surface) !important; }
+
+/* Muted gray surfaces (nested boxes, tab tracks, buttons) -> muted surface */
+.theme-shell .bg-gray-200,
+.theme-shell .bg-gray-300,
+.theme-shell .dark\:bg-gray-700,
+.theme-shell .dark\:bg-gray-800\/50,
+.theme-shell .dark\:bg-gray-900\/50,
+.theme-shell .dark\:bg-gray-700\/50 { background-color:var(--app-surface-muted) !important; }
+
+/* Hover/focus surface states */
+.theme-shell .hover\:bg-gray-50:hover,
+.theme-shell .hover\:bg-gray-100:hover,
+.theme-shell .hover\:bg-gray-300:hover,
+.theme-shell .hover\:bg-gray-400:hover,
+.theme-shell .focus\:bg-gray-50:focus,
+.theme-shell .focus\:bg-gray-100:focus,
+.theme-shell .dark\:hover\:bg-gray-600:hover,
+.theme-shell .dark\:hover\:bg-gray-700:hover,
+.theme-shell .dark\:hover\:bg-gray-800:hover,
+.theme-shell .dark\:hover\:bg-gray-900:hover,
+.theme-shell .dark\:focus\:bg-gray-700:focus,
+.theme-shell .dark\:focus\:bg-gray-800:focus,
+.theme-shell .dark\:focus\:bg-gray-900:focus { background-color:var(--app-surface-muted) !important; }
+
+/* Body copy that would otherwise be dark gray on a dark surface */
+.theme-shell .text-gray-600,
+.theme-shell .text-gray-700,
+.theme-shell .text-gray-300,
+.theme-shell .dark\:text-gray-300,
+.theme-shell .dark\:text-gray-100,
+.theme-shell .hover\:text-gray-900:hover,
+.theme-shell .hover\:text-gray-800:hover,
+.theme-shell .hover\:text-gray-700:hover,
+.theme-shell .dark\:hover\:text-gray-100:hover,
+.theme-shell .dark\:hover\:text-gray-200:hover,
+.theme-shell .dark\:hover\:text-gray-300:hover,
+.theme-shell .focus\:text-gray-800:focus,
+.theme-shell .focus\:text-gray-700:focus,
+.theme-shell .dark\:focus\:text-gray-200:focus,
+.theme-shell .dark\:focus\:text-gray-300:focus { color:var(--app-text) !important; }
+
+/* Secondary text */
+.theme-shell .dark\:text-gray-500,
+.theme-shell .hover\:text-gray-500:hover,
+.theme-shell .focus\:text-gray-500:focus,
+.theme-shell .dark\:hover\:text-gray-400:hover,
+.theme-shell .dark\:hover\:text-gray-500:hover,
+.theme-shell .dark\:focus\:text-gray-400:focus { color:var(--app-muted) !important; }
+
+/* Borders */
+.theme-shell .border-gray-300,
+.theme-shell .border-gray-500,
+.theme-shell .dark\:border-gray-600,
+.theme-shell .dark\:border-gray-700,
+.theme-shell .hover\:border-gray-300:hover,
+.theme-shell .focus\:border-gray-300:focus,
+.theme-shell .dark\:hover\:border-gray-500:hover,
+.theme-shell .dark\:hover\:border-gray-600:hover,
+.theme-shell .dark\:hover\:border-gray-700:hover,
+.theme-shell .dark\:focus\:border-gray-600:focus,
+.theme-shell .dark\:focus\:border-gray-700:focus { border-color:var(--app-border) !important; }
+
+/* Light pastel gradients (e.g. the plan price box) -> themed surface colors */
+.theme-shell .from-blue-50,
+.theme-shell .dark\:from-gray-700 {
+    --tw-gradient-from:var(--app-surface-muted) var(--tw-gradient-from-position, 0%) !important;
+    --tw-gradient-to:var(--app-surface-muted) var(--tw-gradient-to-position, 100%) !important;
+}
+.theme-shell .to-indigo-50,
+.theme-shell .dark\:to-gray-800 {
+    --tw-gradient-to:var(--app-surface-muted) var(--tw-gradient-to-position, 100%) !important;
+}
+
+/* Gradient text (e.g. the plan price number): make it theme text -> accent */
+.theme-shell .from-gray-900,
+.theme-shell .dark\:from-white {
+    --tw-gradient-from:var(--app-text) var(--tw-gradient-from-position, 0%) !important;
+    --tw-gradient-to:rgb(0 0 0 / 0) var(--tw-gradient-to-position, 100%) !important;
+}
+.theme-shell .to-blue-600,
+.theme-shell .dark\:to-blue-400 {
+    --tw-gradient-to:var(--app-accent) var(--tw-gradient-to-position, 100%) !important;
+}
