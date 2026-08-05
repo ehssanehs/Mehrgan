@@ -1,3 +1,11 @@
+@php
+    $_refSettings = \App\Models\Setting::all()->pluck('value', 'key');
+    $_refEnabled = filter_var($_refSettings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
+    $_refFixed = (int) ($_refSettings->get('referral_referrer_reward', 0));
+    $_refPercent = (float) ($_refSettings->get('referral_referrer_reward_percent', 0));
+    $_refWelcome = (int) ($_refSettings->get('referral_welcome_gift', 0));
+    $_refOnlyFirst = filter_var($_refSettings->get('referral_reward_only_first_purchase', '1'), FILTER_VALIDATE_BOOLEAN);
+@endphp
 <x-app-layout>
     <x-slot name="header">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center w-full">
@@ -115,9 +123,11 @@
                         <button @click="tab = 'new_service'" :class="{'border-indigo-500 text-indigo-600 dark:text-indigo-400': tab === 'new_service', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200': tab !== 'new_service'}" class="whitespace-nowrap py-4 px-3 sm:px-1 border-b-2 font-medium text-sm transition">
                             خرید سرویس جدید
                         </button>
+                        @if ($_refEnabled)
                         <button @click="tab = 'referral'" :class="{'border-indigo-500 text-indigo-600 dark:text-indigo-400': tab === 'referral', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200': tab !== 'referral'}" class="whitespace-nowrap py-4 px-3 sm:px-1 border-b-2 font-medium text-sm transition">
                             دعوت از دوستان
                         </button>
+                        @endif
                         <button @click="tab = 'tutorials'" :class="{'border-indigo-500 text-indigo-600 dark:text-indigo-400': tab === 'tutorials', 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200': tab !== 'tutorials'}" class="whitespace-nowrap py-4 px-3 sm:px-1 border-b-2 font-medium text-sm transition">
                             راهنمای اتصال
                         </button>
@@ -433,12 +443,39 @@
 
                     <div x-show="tab === 'referral'" x-transition.opacity x-cloak>
                         <h2 class="text-xl font-bold mb-6 text-gray-900 dark:text-white text-right">کسب درآمد با دعوت از دوستان</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-right">
 
-                            <div class="p-6 rounded-2xl bg-gray-50 dark:bg-gray-800/50 space-y-4 shadow-lg">
-                                <p class="text-gray-600 dark:text-gray-300">با اشتراک‌گذاری لینک زیر، دوستان خود را به ما معرفی کنید. پس از اولین خرید موفق آن‌ها، <span class="font-bold text-green-500">{{ number_format((int)\App\Models\Setting::where('key', 'referral_referrer_reward')->first()?->value ?? 0) }} تومان</span> به کیف پول شما اضافه خواهد شد!</p>
+                        @if (!$_refEnabled)
+                            <div class="p-6 rounded-2xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-800 text-yellow-800 dark:text-yellow-200 text-right">
+                                ⚠️ سیستم دعوت از دوستان در حال حاضر غیرفعال است.
+                            </div>
+                        @else
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-right">
 
-                                <div x-data="{ copied: false }">
+                                <div class="p-6 rounded-2xl bg-gray-50 dark:bg-gray-800/50 space-y-4 shadow-lg">
+                                    <p class="text-gray-600 dark:text-gray-300">
+                                        با اشتراک‌گذاری لینک زیر، دوستان خود را به ما معرفی کنید.
+                                        @if ($_refOnlyFirst) پس از اولین خرید موفق آن‌ها، @else با هر خرید موفق آن‌ها، @endif
+                                        @if ($_refFixed > 0)
+                                            <span class="font-bold text-green-500">{{ number_format($_refFixed) }} تومان</span>
+                                        @endif
+                                        @if ($_refFixed > 0 && $_refPercent > 0) + @endif
+                                        @if ($_refPercent > 0)
+                                            <span class="font-bold text-green-500">{{ rtrim(rtrim(number_format($_refPercent, 2), '0'), '.') }}%</span> از مبلغ سفارش
+                                        @endif
+                                        @if ($_refFixed == 0 && $_refPercent == 0)
+                                            <span class="text-gray-400">در حال حاضر پاداشی تعریف نشده است</span>
+                                        @else
+                                            به کیف پول شما اضافه خواهد شد!
+                                        @endif
+                                    </p>
+
+                                    @if ($_refWelcome > 0)
+                                        <p class="text-sm text-indigo-600 dark:text-indigo-400">
+                                            🎁 هدیه خوش‌آمدگویی <span class="font-bold">{{ number_format($_refWelcome) }} تومان</span> برای دوست شما به محض ثبت‌نام با لینک شما.
+                                        </p>
+                                    @endif
+
+                                    <div x-data="{ copied: false }">
                                     <label for="referral-link-mobile" class="block text-sm font-medium text-gray-500">لینک دعوت اختصاصی شما:</label>
                                     <div class="mt-1 flex flex-col sm:flex-row rounded-md shadow-sm">
                                         <input type="text" readonly id="referral-link-mobile" value="{{ route('register') }}?ref={{ auth()->user()->referral_code }}" class="flex-1 block w-full rounded-t-md sm:rounded-r-md sm:rounded-t-none sm:text-sm border-gray-300 dark:bg-gray-900 dark:border-gray-600 text-left" dir="ltr">
@@ -457,7 +494,8 @@
                                 <p class="text-sm opacity-80 mt-1">نفر</p>
                             </div>
 
-                        </div>
+                            </div>
+                        @endif
                     </div>
 
                     @if (Module::isEnabled('Ticketing'))
