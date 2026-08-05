@@ -1,9 +1,9 @@
-# VPNMarket-Enhanced - Final Implementation Report
+# Mehrgan-Enhanced - Final Implementation Report
 
 **Date:** 2026-07-27
 **Branch:** `arena/019fa3d0-massage`
-**Source Repo:** https://github.com/ehssanehs/vpn-market
-**Enhanced Repo (intended):** `ehssanehs/vpn` and `VPNMarket-Enhanced`
+**Source Repo:** https://github.com/ehssanehs/Mehrgan
+**Enhanced Repo (intended):** `ehssanehs/vpn` and `Mehrgan-Enhanced`
 **PRs Opened:** 
 - https://github.com/ehssanehs/massagecrm/pull/3 (arena branch)
 - https://github.com/ehssanehs/massagecrm/pull/2 (test-branch)
@@ -220,7 +220,7 @@ php artisan migrate:fresh --env=testing
 ## 8. Migration Instructions (for production)
 
 ```bash
-cd /var/www/vpnmarket
+cd /var/www/mehrgan
 git pull origin main  # or from vpn repo
 composer install --no-dev --optimize-autoloader
 php artisan migrate

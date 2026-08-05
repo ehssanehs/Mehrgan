@@ -1,31 +1,31 @@
 <p align="center">
   <!-- لوگوی پروژه شما از پوشه github/github/logo.png -->
-  <img src="https://raw.githubusercontent.com/ehssanehs/vpn-market/main/github/github/logo.png" width="350" alt="VPNMarket Logo">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/logo.png" width="350" alt="Mehrgan Logo">
 </p>
 
-<h1 align="center">VPNMarket - پنل مدیریت جامع و هوشمند مرزبان و X-UI</h1>
+<h1 align="center">Mehrgan - پنل مدیریت جامع و هوشمند مرزبان و X-UI</h1>
 
 <p align="center">
   <strong>یک ابزار قدرتمند، رایگان و متن-باز برای مدیریت، فروش و کسب درآمد از سرویس‌های VPN مبتنی بر پنل‌های Marzban و Sanaei (X-UI)</strong>
 </p>
 
 <p align="center">
-  <a href="https://t.me/VPNMarket_OfficialSupport"><img src="https://img.shields.io/badge/Telegram-Group-blue.svg?style=for-the-badge&logo=telegram" alt="گروه تلگرام"></a>
+  <a href="https://t.me/Mehrgan_OfficialSupport"><img src="https://img.shields.io/badge/Telegram-Group-blue.svg?style=for-the-badge&logo=telegram" alt="گروه تلگرام"></a>
   <a href="https://www.youtube.com/@iraneclips8168/videos"><img src="https://img.shields.io/badge/YouTube-Channel-red.svg?style=for-the-badge&logo=youtube" alt="کانال یوتیوب"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge" alt="لایسنس"></a>
 </p>
 
 ---
 
-**VPNMarket** فقط یک پنل مدیریت ساده نیست؛ یک اکوسیستم کامل برای متحول کردن کسب‌وکار VPN شماست. اگر از پنل‌های پیچیده، کاربری سخت و عدم وجود امکانات فروش خودکار خسته شده‌اید، این پروژه برای شما ساخته شده است. ما با استفاده از قدرت **لاراول** و زیبایی **فیلامنت**، ابزاری را توسعه داده‌ایم که نه تنها مدیریت را ساده می‌کند، بلکه به شما در کسب درآمد نیز کمک می‌کند.
+**Mehrgan** فقط یک پنل مدیریت ساده نیست؛ یک اکوسیستم کامل برای متحول کردن کسب‌وکار VPN شماست. اگر از پنل‌های پیچیده، کاربری سخت و عدم وجود امکانات فروش خودکار خسته شده‌اید، این پروژه برای شما ساخته شده است. ما با استفاده از قدرت **لاراول** و زیبایی **فیلامنت**، ابزاری را توسعه داده‌ایم که نه تنها مدیریت را ساده می‌کند، بلکه به شما در کسب درآمد نیز کمک می‌کند.
 
 ## ✨ نمایی از محیط پنل
 
 <p align="center">
-   <img src="https://raw.githubusercontent.com/ehssanehs/vpn-market/main/github/github/panel1.PNG" width="45%" alt="داشبورد اصلی">
-  <img src="https://raw.githubusercontent.com/ehssanehs/vpn-market/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران">
+   <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel1.PNG" width="45%" alt="داشبورد اصلی">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران">
   <br>
-  <img src="https://raw.githubusercontent.com/ehssanehs/vpn-market/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور">
 </p>
 
 ## 🚀 ویژگی‌های کلیدی که عاشقشان خواهید شد
@@ -63,7 +63,7 @@
 
 برای دریافت پشتیبانی، گفتگو با سایر کاربران، ارائه پیشنهاد و اطلاع از آخرین آپدیت‌ها، ما را در شبکه‌های اجتماعی دنبال کنید:
 
-- 🔵 **گروه پشتیبانی تلگرام:** [**VPNMarket_OfficialSupport**](https://t.me/VPNMarket_OfficialSupport)
+- 🔵 **گروه پشتیبانی تلگرام:** [**Mehrgan_OfficialSupport**](https://t.me/Mehrgan_OfficialSupport)
   - *محل اصلی برای پرسش و پاسخ و حل مشکلات شما.*
 
 - 🔴 **کانال آموزشی یوتیوب:** [**Iran Eclips**](https://www.youtube.com/@iraneclips8168/videos)
@@ -80,7 +80,7 @@
 وارد سرور خود شوید و دستور زیر را اجرا کنید. اسکریپت ما بقیه کارها را به صورت خودکار انجام می‌دهد!
 
 ```bash
-wget -O install.sh https://raw.githubusercontent.com/ehssanehs/vpn-market/main/install.sh && sudo bash install.sh
+wget -O install.sh https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/install.sh && sudo bash install.sh
 ```
 
 ## 🔄 نحوه آپدیت پروژه
@@ -90,7 +90,7 @@ wget -O install.sh https://raw.githubusercontent.com/ehssanehs/vpn-market/main/i
 ۱. از طریق SSH به سرور خود متصل شوید.
 ۲. وارد پوشه اصلی پروژه شوید:
    ```bash
-   cd /var/www/vpnmarket
+   cd /var/www/mehrgan
    ```
 ۳. دستور زیر را اجرا کنید تا اسکریپت آپدیت، آخرین تغییرات را دریافت و نصب کند:
    ```bash
@@ -100,11 +100,11 @@ wget -O install.sh https://raw.githubusercontent.com/ehssanehs/vpn-market/main/i
 
 **توجه:** فرآیند آپدیت ممکن است چند دقیقه طول بکشد. در این مدت سایت شما در حالت "تعمیر" خواهد بود.
 
-## 🆕 ویژگی‌های جدید (VPNMarket-Enhanced)
+## 🆕 ویژگی‌های جدید (Mehrgan-Enhanced)
 
 ### 📥 Feature 1: Import Existing Subscription
 
-امکان وارد کردن اشتراک‌های موجود از پنل‌های X-UI و مرزبان به داخل VPNMarket.
+امکان وارد کردن اشتراک‌های موجود از پنل‌های X-UI و مرزبان به داخل Mehrgan.
 
 **قابلیت‌ها:**
 - پشتیبانی هم در وب‌سایت و هم در ربات تلگرام
@@ -156,7 +156,7 @@ wget -O install.sh https://raw.githubusercontent.com/ehssanehs/vpn-market/main/i
 - شماره‌ها همیشه افزایشی، حذف کاربران باعث استفاده مجدد نمی‌شود
 - مثال: `server1u1, server1u2, server1u3` → حذف `server1u2` → بعدی `server1u4`
 - تغییر پیشوند: `server1u` → `eu-` → شمارنده ریست از 1: `eu-1, eu-2, ...`
-- نام تولید شده هم در دیتابیس VPNMarket و هم در پنل Xray/XUI استفاده می‌شود
+- نام تولید شده هم در دیتابیس Mehrgan و هم در پنل Xray/XUI استفاده می‌شود
 - اگر نام سفارشی (custom_username) وارد شود، اولویت با آن است
 - اگر غیرفعال باشد، از نام‌گذاری قدیمی `user-{id}-order-{id}` استفاده می‌شود
 

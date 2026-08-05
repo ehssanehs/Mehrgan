@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ==================================================================================
-# === اسکریپت نصب چندنمونه‌ای برای پروژه VPNMarket روی Ubuntu 22.04             ===
+# === اسکریپت نصب چندنمونه‌ای برای پروژه Mehrgan روی Ubuntu 22.04             ===
 # === پشتیبانی از نصب همزمان چندین نمونه با پوشه‌ها، دیتابیس و دامنه‌های مستقل   ===
 # === هر نمونه: وب‌سایت + ربات تلگرام + ورکر صف مستقل — اجرای موازی            ===
-# === https://github.com/ehssanehs/vpn-market                                    ===
+# === https://github.com/ehssanehs/Mehrgan                                    ===
 # ==================================================================================
 
 set -e
@@ -17,7 +17,7 @@ RED='\033[0;31m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-GITHUB_REPO="https://github.com/ehssanehs/vpn-market.git"
+GITHUB_REPO="https://github.com/ehssanehs/Mehrgan.git"
 PHP_VERSION="8.3"
 
 # ══════════════════════════════════════════════════════════════
@@ -38,9 +38,9 @@ instance_exists() {
 
 # فهرست نمونه‌های نصب‌شده
 list_instances() {
-    echo -e "\n${CYAN}━━━ نمونه‌های نصب‌شده VPNMarket ━━━${NC}\n"
+    echo -e "\n${CYAN}━━━ نمونه‌های نصب‌شده Mehrgan ━━━${NC}\n"
     local found=0
-    for envfile in /var/www/vpnmarket-*/; do
+    for envfile in /var/www/mehrgan-*/; do
         if [ -f "${envfile}.env" ]; then
             local slug=$(basename "$envfile")
             local domain=$(grep -E '^APP_URL=' "${envfile}.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
@@ -49,11 +49,11 @@ list_instances() {
             found=1
         fi
     done
-    # همچنین بررسی پوشه قدیمی (vpnmarket بدون شماره)
-    if [ -f "/var/www/vpnmarket/.env" ]; then
-        local domain=$(grep -E '^APP_URL=' "/var/www/vpnmarket/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
-        local dbname=$(grep -E '^DB_DATABASE=' "/var/www/vpnmarket/.env" 2>/dev/null | cut -d'=' -f2 | tr -d ' \t\r\n' || echo "نامشخص")
-        printf "  ${GREEN}●${NC}  %-25s  🌐 %-30s  🗃 %s\n" "vpnmarket" "$domain" "$dbname"
+    # همچنین بررسی پوشه قدیمی (mehrgan بدون شماره)
+    if [ -f "/var/www/mehrgan/.env" ]; then
+        local domain=$(grep -E '^APP_URL=' "/var/www/mehrgan/.env" 2>/dev/null | sed 's|^APP_URL=||;s|https\?://||;s|/.*||' | tr -d ' \t\r\n' || echo "نامشخص")
+        local dbname=$(grep -E '^DB_DATABASE=' "/var/www/mehrgan/.env" 2>/dev/null | cut -d'=' -f2 | tr -d ' \t\r\n' || echo "نامشخص")
+        printf "  ${GREEN}●${NC}  %-25s  🌐 %-30s  🗃 %s\n" "mehrgan" "$domain" "$dbname"
         found=1
     fi
     if [ $found -eq 0 ]; then
@@ -129,7 +129,7 @@ install_prerequisites() {
 }
 
 # ══════════════════════════════════════════════════════════════
-#  نصب یک نمونه از VPNMarket
+#  نصب یک نمونه از Mehrgan
 # ══════════════════════════════════════════════════════════════
 
 install_instance() {
@@ -137,12 +137,12 @@ install_instance() {
 
     echo
     echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║  نصب نمونه ${BOLD}#${INSTANCE_NUM}${NC}${CYAN} از VPNMarket                              ║${NC}"
+    echo -e "${CYAN}║  نصب نمونه ${BOLD}#${INSTANCE_NUM}${NC}${CYAN} از Mehrgan                              ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
     echo
 
     # --- نام پوشه پروژه ---
-    local DEFAULT_SLUG="vpnmarket-${INSTANCE_NUM}"
+    local DEFAULT_SLUG="mehrgan-${INSTANCE_NUM}"
     read -p "📂 نام پوشه پروژه [پیش‌فرض: ${DEFAULT_SLUG}]: " FOLDER_NAME
     FOLDER_NAME=$(echo "$FOLDER_NAME" | xargs)  # trim whitespace
     if [ -z "$FOLDER_NAME" ]; then
@@ -244,7 +244,7 @@ install_instance() {
     # --- تنظیم ENV ---
     echo -e "${YELLOW}⚙️ تنظیم فایل .env ...${NC}"
     sudo -u www-data cp .env.example .env
-    sudo sed -i "s|APP_NAME=.*|APP_NAME=VPNMarket-${INSTANCE_NUM}|" .env
+    sudo sed -i "s|APP_NAME=.*|APP_NAME=Mehrgan-${INSTANCE_NUM}|" .env
     sudo sed -i "s|DB_DATABASE=.*|DB_DATABASE=$DB_NAME|" .env
     sudo sed -i "s|DB_USERNAME=.*|DB_USERNAME=$DB_USER|" .env
     sudo sed -i "s|DB_PASSWORD=.*|DB_PASSWORD=$DB_PASS|" .env
@@ -383,7 +383,7 @@ EOF
 
 echo
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
-echo -e "${CYAN}║  ${BOLD}نصب چندنمونه‌ای VPNMarket${NC}                                ${CYAN}║${NC}"
+echo -e "${CYAN}║  ${BOLD}نصب چندنمونه‌ای Mehrgan${NC}                                ${CYAN}║${NC}"
 echo -e "${CYAN}║  پشتیبانی از نصب همزمان چندین نمونه مستقل              ║${NC}"
 echo -e "${CYAN}║  هر نمونه: وب‌سایت + ربات تلگرام + ورکر صف مستقل       ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"

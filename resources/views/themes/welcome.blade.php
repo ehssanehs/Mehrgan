@@ -1,6 +1,6 @@
 @extends('layouts.frontend')
 
-@section('title', 'خوش آمدید - VPNMarket')
+@section('title', 'خوش آمدید - Mehrgan')
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('themes/welcome/css/style.css') }}">
@@ -10,7 +10,7 @@
     <div class="welcome-box" data-aos="fade-up">
         <h1>نصب با موفقیت انجام شد!</h1>
         <p>
-            به <span class="brand">VPNMarket</span> خوش آمدید.
+            به <span class="brand">Mehrgan</span> خوش آمدید.
             <br>
             برای شروع و انتخاب قالب اصلی وب‌سایت، لطفاً از طریق دکمه زیر وارد پنل مدیریت شوید.
         </p>

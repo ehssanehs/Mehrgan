@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==============================================================================
-# ===      اسکریپت مدیریت نمونه‌های VPNMarket                               ===
+# ===      اسکریپت مدیریت نمونه‌های Mehrgan                               ===
 # ===  استفاده: bash manage.sh [status|list|restart|stop|start] [slug]        ===
 # ==============================================================================
 
@@ -15,19 +15,19 @@ NC='\033[0m'
 
 # --- فهرست نمونه‌ها ---
 find_instances() {
-    for dir in /var/www/vpnmarket-*/; do
+    for dir in /var/www/mehrgan-*/; do
         if [ -f "${dir}.env" ]; then
             basename "$dir"
         fi
     done
-    if [ -f "/var/www/vpnmarket/.env" ]; then
-        echo "vpnmarket"
+    if [ -f "/var/www/mehrgan/.env" ]; then
+        echo "mehrgan"
     fi
 }
 
 # --- نمایش فهرست ---
 cmd_list() {
-    echo -e "\n${CYAN}━━━ نمونه‌های نصب‌شده VPNMarket ━━━${NC}\n"
+    echo -e "\n${CYAN}━━━ نمونه‌های نصب‌شده Mehrgan ━━━${NC}\n"
     local found=0
     while IFS= read -r slug; do
         local_path="/var/www/$slug"
@@ -97,7 +97,7 @@ cmd_restart() {
     local slug="$1"
     if [ -z "$slug" ]; then
         echo -e "${RED}نام نمونه (slug) را مشخص کنید.${NC}"
-        echo -e "مثال: bash manage.sh restart vpnmarket-1"
+        echo -e "مثال: bash manage.sh restart mehrgan-1"
         return 1
     fi
 
@@ -164,7 +164,7 @@ case "$ACTION" in
         echo
         echo -e "مثال:"
         echo -e "  bash manage.sh list"
-        echo -e "  bash manage.sh status vpnmarket-1"
-        echo -e "  bash manage.sh restart vpnmarket-2"
+        echo -e "  bash manage.sh status mehrgan-1"
+        echo -e "  bash manage.sh restart mehrgan-2"
         ;;
 esac

@@ -81,7 +81,7 @@ class ManageSequentialNaming extends Page implements HasForms
                                     <li>شماره‌گذاری همیشه افزایشی است</li>
                                     <li>حذف کاربران باعث استفاده مجدد شماره‌ها نمی‌شود</li>
                                     <li>تغییر پیشوند، شمارنده را به 0 ریست می‌کند و نام‌گذاری از 1 شروع می‌شود</li>
-                                    <li>نام تولید شده هم در دیتابیس VPNMarket و هم در پنل Xray/XUI استفاده می‌شود</li>
+                                    <li>نام تولید شده هم در دیتابیس Mehrgan و هم در پنل Xray/XUI استفاده می‌شود</li>
                                 </ul>
                             '))
                             ->columnSpanFull(),

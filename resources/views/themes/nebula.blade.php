@@ -125,7 +125,7 @@
                 <p class="mb-2">{{ $settings->get('nebula_footer_text') ?: '© 2025 Nebula Networks' }}</p>
                 <p class="mb-0" style="opacity: 0.7;">
                     طراحی و توسعه توسط
-                    <a href="https://t.me/VPNMarket_OfficialSupport" target="_blank" rel="noopener noreferrer">VPNMarket</a>
+                    <a href="https://t.me/Mehrgan_OfficialSupport" target="_blank" rel="noopener noreferrer">Mehrgan</a>
                 </p>
             </div>
         </footer>
