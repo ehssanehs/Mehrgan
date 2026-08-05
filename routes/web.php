@@ -47,7 +47,7 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'not.banned'])->group(function () {
 
 
     Route::prefix('notifications')->name('notifications.')->group(function () {

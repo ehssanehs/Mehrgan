@@ -32,6 +32,10 @@ class User extends Authenticatable implements FilamentUser
         'balance',
         'referrer_id',
         'referral_code',
+        'is_banned',
+        'banned_at',
+        'ban_reason',
+        'banned_by',
     ];
 
     /**
@@ -54,12 +58,66 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_banned' => 'boolean',
+            'banned_at' => 'datetime',
+            'banned_by' => 'integer',
         ];
     }
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->is_admin;
+        return $this->is_admin && ! $this->isBanned();
+    }
+
+    /**
+     * Whether this user is currently banned.
+     */
+    public function isBanned(): bool
+    {
+        return (bool) $this->is_banned;
+    }
+
+    /**
+     * Ban the user (blocks site login and telegram bot access).
+     */
+    public function ban(?string $reason = null, ?int $bannedBy = null): void
+    {
+        $this->forceFill([
+            'is_banned' => true,
+            'banned_at' => now(),
+            'ban_reason' => $reason,
+            'banned_by' => $bannedBy ?? auth('web')->id(),
+            'bot_state' => null,
+        ])->save();
+    }
+
+    /**
+     * Unban the user and restore full access.
+     */
+    public function unban(): void
+    {
+        $this->forceFill([
+            'is_banned' => false,
+            'banned_at' => null,
+            'ban_reason' => null,
+            'banned_by' => null,
+        ])->save();
+    }
+
+    /**
+     * Scope: only non-banned users.
+     */
+    public function scopeNotBanned($query)
+    {
+        return $query->where('is_banned', false);
+    }
+
+    /**
+     * Scope: only banned users.
+     */
+    public function scopeBanned($query)
+    {
+        return $query->where('is_banned', true);
     }
 
     public function referrals()

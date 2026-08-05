@@ -121,6 +121,86 @@ class WebhookController extends BaseController
         }
     }
 
+    /**
+     * ارسال پیام وضعیت مسدودی/رفع مسدودی به کاربر در تلگرام
+     */
+    public function sendBanStatusMessage(User $user, ?string $reason = null, bool $banned = true): bool
+    {
+        $chatId = (string) $user->telegram_chat_id;
+        if (empty($chatId)) {
+            return false;
+        }
+
+        try {
+            if ($this->settings->isEmpty()) {
+                $this->settings = Setting::all()->pluck('value', 'key');
+            }
+            $botToken = $this->settings->get('telegram_bot_token');
+            if (!$botToken) {
+                Log::error('Cannot send ban status message: bot token is not set.');
+                return false;
+            }
+            Telegram::setAccessToken($botToken);
+
+            if ($banned) {
+                $text = "🚫 *حساب شما مسدود شد*\n\n";
+                $text .= $this->escape("دسترسی شما به سایت و ربات تلگرام توسط مدیریت مسدود شده است.") . "\n";
+                if (!empty($reason)) {
+                    $text .= "\n📝 *دلیل:* " . $this->escape($reason) . "\n";
+                }
+                $text .= "\n" . $this->escape("در صورت نیاز با پشتیبانی تماس بگیرید.");
+            } else {
+                $text = "✅ *حساب شما فعال شد*\n\n";
+                $text .= $this->escape("مسدودی حساب شما توسط مدیریت برداشته شد و دسترسی شما به سایت و ربات تلگرام برقرار است.") . "\n";
+                $text .= "\n" . $this->escape("از همراهی شما متشکریم.");
+            }
+
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $text,
+                'parse_mode' => 'MarkdownV2',
+            ]);
+
+            Log::info("Ban status message sent to user {$chatId}.", ['banned' => $banned, 'reason' => $reason]);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send ban status Telegram message: ' . $e->getMessage(), [
+                'user_id' => $user->id ?? null,
+                'banned' => $banned,
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * ارسال پیام «مسدود هستید» به کاربری که در ربات تلگرام فعالیت می‌کند
+     */
+    protected function sendBannedMessage(int $chatId): void
+    {
+        try {
+            if ($this->settings->isEmpty()) {
+                $this->settings = Setting::all()->pluck('value', 'key');
+            }
+            $botToken = $this->settings->get('telegram_bot_token');
+            if (!$botToken) {
+                return;
+            }
+            Telegram::setAccessToken($botToken);
+
+            $text = "🚫 *حساب شما مسدود شده است*\n\n";
+            $text .= $this->escape("دسترسی شما به ربات توسط مدیریت مسدود شده است.") . "\n";
+            $text .= $this->escape("در صورت نیاز با پشتیبانی تماس بگیرید.");
+
+            Telegram::sendMessage([
+                'chat_id' => $chatId,
+                'text' => $text,
+                'parse_mode' => 'MarkdownV2',
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to send banned message: ' . $e->getMessage(), ['chat_id' => $chatId]);
+        }
+    }
+
     public function sendResellerRequestApprovedMessage(User $user): bool
     {
         $chatId = (string) $user->telegram_chat_id;
@@ -592,6 +672,13 @@ class WebhookController extends BaseController
 
         $user = User::where('telegram_chat_id', $chatId)->first();
 
+        // 🚫 کاربر مسدود شده حق استفاده از ربات را ندارد
+        if ($user && $user->isBanned()) {
+            $user->update(['bot_state' => null]);
+            $this->sendBannedMessage($chatId);
+            return;
+        }
+
         if ($user && !$this->isUserMemberOfChannel($user)) {
             $this->showChannelRequiredMessage($chatId);
             return;
@@ -623,7 +710,7 @@ class WebhookController extends BaseController
                 $referrer = User::where('referral_code', $referralCode)->first();
                 $referralEnabled = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
-                if ($referrer && $referralEnabled && $referrer->id !== $user->id) {
+                if ($referrer && $referralEnabled && ! $referrer->isBanned() && $referrer->id !== $user->id) {
                     $user->referrer_id = $referrer->id;
                     $user->save();
 
@@ -1206,6 +1293,20 @@ class WebhookController extends BaseController
         }
 
         $user = User::where('telegram_chat_id', $chatId)->first();
+
+        // 🚫 کاربر مسدود شده حق استفاده از ربات را ندارد
+        if ($user && $user->isBanned()) {
+            $user->update(['bot_state' => null]);
+            try {
+                Telegram::answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                    'text' => 'حساب شما مسدود شده است.',
+                    'show_alert' => true,
+                ]);
+            } catch (\Exception $e) {}
+            $this->sendBannedMessage($chatId);
+            return;
+        }
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
             $this->showChannelRequiredMessage($chatId, $messageId);
@@ -1907,6 +2008,13 @@ class WebhookController extends BaseController
         }
 
         $user = User::where('telegram_chat_id', $chatId)->first();
+
+        // 🚫 کاربر مسدود شده حق استفاده از ربات را ندارد
+        if ($user && $user->isBanned()) {
+            $user->update(['bot_state' => null]);
+            $this->sendBannedMessage($chatId);
+            return;
+        }
 
         if ($user && !$this->isUserMemberOfChannel($user)) {
             $this->showChannelRequiredMessage($chatId);
