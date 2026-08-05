@@ -2303,6 +2303,25 @@ class WebhookController extends BaseController
                 }
             });
 
+            // The wallet purchase path used to mark the order as paid without emitting
+            // OrderPaid. As a result, referral rewards (and their Telegram notification)
+            // were only skipped for purchases made through the bot.
+            //
+            // Dispatch after the transaction has committed so the listener can see the
+            // paid order and its transaction when it checks first-purchase eligibility.
+            try {
+                OrderPaid::dispatch($order->fresh());
+            } catch (\Throwable $e) {
+                // A referral/notification failure must not report a completed purchase as
+                // failed to the customer. The reward listener is idempotent and can be
+                // safely retried from the logged order if necessary.
+                Log::error('Unable to process referral reward for Telegram wallet purchase.', [
+                    'order_id' => $order->id,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             // ارسال پیام موفقیت (خارج از تراکنش)
             // اطمینان از در دسترس بودن سفارش و پلن
             if (!$order || !$plan) {
