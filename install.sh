@@ -190,7 +190,31 @@ install_instance() {
         echo -e "${RED}رمز عبور نباید خالی باشد.${NC}"
     done
 
-    read -p "✉️ ایمیل SSL: " ADMIN_EMAIL
+    # --- حساب ادمین (برای ورود به پنل مدیریت) ---
+    echo -e "${CYAN}━━━ اطلاعات کاربر ادمین (ورود به پنل مدیریت) ━━━${NC}"
+    read -p "✉️ ایمیل ادمین [پیش‌فرض: admin@example.com]: " ADMIN_EMAIL
+    ADMIN_EMAIL=$(echo "$ADMIN_EMAIL" | xargs)
+    [ -z "$ADMIN_EMAIL" ] && ADMIN_EMAIL="admin@example.com"
+
+    while true; do
+        read -s -p "🔑 رمز عبور ادمین [پیش‌فرض: password (خالی = پیش‌فرض)]: " ADMIN_PASS
+        echo
+        if [ -z "$ADMIN_PASS" ]; then
+            ADMIN_PASS="password"
+            break
+        fi
+        read -s -p "🔑 تکرار رمز عبور ادمین: " ADMIN_PASS_CONFIRM
+        echo
+        if [ "$ADMIN_PASS" = "$ADMIN_PASS_CONFIRM" ]; then
+            break
+        fi
+        echo -e "${RED}رمز عبور و تکرار آن یکسان نیستند؛ دوباره وارد کنید.${NC}"
+    done
+
+    # --- ایمیل SSL (برای certbot) ---
+    read -p "✉️ ایمیل برای گواهینامه SSL [پیش‌فرض: همان ایمیل ادمین]: " SSL_EMAIL
+    SSL_EMAIL=$(echo "$SSL_EMAIL" | xargs)
+    [ -z "$SSL_EMAIL" ] && SSL_EMAIL="$ADMIN_EMAIL"
     echo
 
     # --- شروع نصب ---
@@ -199,6 +223,7 @@ install_instance() {
     echo -e "  پوشه:   ${PROJECT_PATH}"
     echo -e "  دامنه:  ${DOMAIN}"
     echo -e "  دیتابیس: ${DB_NAME}"
+    echo -e "  ادمین:  ${ADMIN_EMAIL}"
     echo
 
     # --- دانلود پروژه ---
@@ -231,6 +256,18 @@ install_instance() {
         sudo sed -i "s|CACHE_PREFIX=.*|CACHE_PREFIX=${INSTANCE_SLUG}_|I" .env
     else
         echo "CACHE_PREFIX=${INSTANCE_SLUG}_" | sudo tee -a .env > /dev/null
+    fi
+
+    # --- اعتبار کاربر ادمین (خوانده می‌شود توسط DatabaseSeeder هنگام seed) ---
+    if grep -q "^ADMIN_EMAIL=" .env; then
+        sudo sed -i "s|^ADMIN_EMAIL=.*|ADMIN_EMAIL=$ADMIN_EMAIL|" .env
+    else
+        echo "ADMIN_EMAIL=$ADMIN_EMAIL" | sudo tee -a .env > /dev/null
+    fi
+    if grep -q "^ADMIN_PASSWORD=" .env; then
+        sudo sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PASS|" .env
+    else
+        echo "ADMIN_PASSWORD=$ADMIN_PASS" | sudo tee -a .env > /dev/null
     fi
 
     # --- نصب وابستگی‌ها ---
@@ -312,7 +349,7 @@ EOF
     # --- SSL ---
     read -p "🔒 فعال‌سازی SSL برای ${DOMAIN}؟ (y/n): " ENABLE_SSL
     if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
-        sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" 2>/dev/null || \
+        sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$SSL_EMAIL" 2>/dev/null || \
             echo -e "${YELLOW}⚠️ فعال‌سازی SSL ناموفق بود. بعداً دستی اجرا کنید: certbot --nginx -d $DOMAIN${NC}"
     fi
 
@@ -329,8 +366,14 @@ EOF
     echo -e "${GREEN}║  ⏰ Cron: /etc/cron.d/${INSTANCE_SLUG}${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════╝${NC}"
     echo
-    echo -e "${RED}⚠️ اقدام فوری: بلافاصله پس از اولین ورود، رمز عبور کاربر ادمین را تغییر دهید!${NC}"
-    echo -e "   ایمیل پیش‌فرض: ${YELLOW}admin@example.com${NC}  |  رمز عبور: ${YELLOW}password${NC}"
+    echo -e "${GREEN}🔑 ورود به پنل مدیریت (https://${DOMAIN}/admin):${NC}"
+    echo -e "   ایمیل ادمین: ${YELLOW}${ADMIN_EMAIL}${NC}"
+    if [ "$ADMIN_PASS" = "password" ]; then
+        echo -e "   ${RED}⚠️ از رمز عبور پیش‌فرض «password» استفاده شد!${NC}"
+        echo -e "   ${RED}   حتماً پس از اولین ورود، رمز عبور را تغییر دهید.${NC}"
+    else
+        echo -e "   رمز عبور: ${YELLOW}(رمزی که در زمان نصب وارد کردید)${NC}"
+    fi
     echo
 }
 
