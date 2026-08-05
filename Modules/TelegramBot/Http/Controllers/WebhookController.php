@@ -694,6 +694,10 @@ class WebhookController extends BaseController
             case '📚 راهنمای اتصال':
                 $this->sendTutorialsMenu($chatId);
                 break;
+            case '❓ سوالات متداول':
+            case '/faq':
+                $this->sendFaqList($chatId);
+                break;
             case '🧪 اکانت تست':
                 if (!filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
                     Telegram::sendMessage([
@@ -1188,6 +1192,16 @@ class WebhookController extends BaseController
             return;
         }
 
+        if (Str::startsWith($data, 'faq_view_')) {
+            try {
+                Telegram::answerCallbackQuery(['callback_query_id' => $callbackQuery->getId()]);
+            } catch (\Exception $e) {}
+
+            $faqId = (int) Str::after($data, 'faq_view_');
+            $this->sendFaqAnswer($chatId, $faqId, $messageId);
+            return;
+        }
+
         try {
             Telegram::answerCallbackQuery(['callback_query_id' => $callbackQuery->getId()]);
         } catch (\Exception $e) { Log::warning('Could not answer callback query: ' . $e->getMessage()); }
@@ -1335,6 +1349,7 @@ class WebhookController extends BaseController
                 case '/deposit': $this->showDepositOptions($user, $messageId); break;
                 case '/transactions': $this->sendTransactions($user, $messageId); break;
                 case '/tutorials': $this->sendTutorialsMenu($chatId, $messageId); break;
+                case '/faq': $this->sendFaqList($chatId, $messageId); break;
                 case '/tutorial_android': $this->sendTutorial('android', $chatId, $messageId); break;
                 case '/tutorial_ios': $this->sendTutorial('ios', $chatId, $messageId); break;
                 case '/tutorial_windows': $this->sendTutorial('windows', $chatId, $messageId); break;
@@ -2830,6 +2845,83 @@ class WebhookController extends BaseController
         ]);
 
         $this->sendRawMarkdownMessage($user->telegram_chat_id, $message, $keyboard, $messageId);
+    }
+
+    /**
+     * ❓ نمایش لیست سوالات متداول (FAQ)
+     */
+    protected function sendFaqList($chatId, $messageId = null)
+    {
+        try {
+            $faqs = \Modules\TelegramBot\Models\Faq::where('is_active', true)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($faqs->isEmpty()) {
+                $keyboard = Keyboard::make()->inline()
+                    ->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت به منوی اصلی', 'callback_data' => '/start'])]);
+                $this->sendOrEditMessage(
+                    $chatId,
+                    $this->escape("در حال حاضر هیچ سوال متداولی ثبت نشده است. در صورت نیاز می‌توانید با پشتیبانی در ارتباط باشید."),
+                    $keyboard,
+                    $messageId
+                );
+                return;
+            }
+
+            $message = "❓ *سوالات متداول*\n\n" . $this->escape("لطفاً سوال مورد نظر خود را انتخاب کنید:");
+
+            $keyboard = Keyboard::make()->inline();
+
+            foreach ($faqs as $faq) {
+                $keyboard->row([
+                    Keyboard::inlineButton([
+                        'text' => mb_substr($faq->question, 0, 60),
+                        'callback_data' => 'faq_view_' . $faq->id,
+                    ]),
+                ]);
+            }
+
+            $keyboard->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت به منوی اصلی', 'callback_data' => '/start'])]);
+
+            $this->sendOrEditMessage($chatId, $message, $keyboard, $messageId);
+        } catch (\Exception $e) {
+            Log::error('Error in sendFaqList: ' . $e->getMessage(), [
+                'chat_id' => $chatId,
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            $keyboard = Keyboard::make()->inline()
+                ->row([Keyboard::inlineButton(['text' => '🏠 بازگشت به منوی اصلی', 'callback_data' => '/start'])]);
+
+            $this->sendOrEditMessage($chatId, $this->escape("❌ خطایی در بارگذاری سوالات متداول رخ داد."), $keyboard, $messageId);
+        }
+    }
+
+    /**
+     * ❓ نمایش پاسخ یک سوال متداول (FAQ)
+     */
+    protected function sendFaqAnswer($chatId, int $faqId, $messageId = null)
+    {
+        $faq = \Modules\TelegramBot\Models\Faq::where('id', $faqId)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$faq) {
+            $keyboard = Keyboard::make()->inline()
+                ->row([Keyboard::inlineButton(['text' => '❓ بازگشت به سوالات متداول', 'callback_data' => '/faq'])]);
+            $this->sendOrEditMessage($chatId, $this->escape("❌ این سوال دیگر در دسترس نیست."), $keyboard, $messageId);
+            return;
+        }
+
+        $message = "❓ *" . $this->escape($faq->question) . "*\n\n" . $this->escape($faq->answer);
+
+        $keyboard = Keyboard::make()->inline()
+            ->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت به لیست سوالات', 'callback_data' => '/faq'])])
+            ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+        $this->sendOrEditMessage($chatId, $message, $keyboard, $messageId);
     }
 
     protected function sendTutorialsMenu($chatId, $messageId = null)
@@ -4978,12 +5070,16 @@ class WebhookController extends BaseController
                 Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
             ]);
 
-        $supportTrialRow = [];
-        $supportTrialRow[] = Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']);
+        $keyboard->row([
+            Keyboard::inlineButton(['text' => '❓ سوالات متداول', 'callback_data' => '/faq']),
+            Keyboard::inlineButton(['text' => '💬 پشتیبانی', 'callback_data' => '/support_menu']),
+        ]);
+
         if ($showTrial) {
-            $supportTrialRow[] = Keyboard::inlineButton(['text' => '🧪 اکانت تست', 'callback_data' => 'trial_request']);
+            $keyboard->row([
+                Keyboard::inlineButton(['text' => '🧪 اکانت تست', 'callback_data' => 'trial_request']),
+            ]);
         }
-        $keyboard->row($supportTrialRow);
 
         return $keyboard;
     }
@@ -5003,12 +5099,11 @@ class WebhookController extends BaseController
             ['🛒 خرید سرویس', '🛠 سرویس‌های من'],
             ['💰 کیف پول', '📜 تاریخچه تراکنش‌ها'],
             ['💬 پشتیبانی', '🎁 دعوت از دوستان'],
+            ['📚 راهنمای اتصال', '❓ سوالات متداول'],
         ];
 
         if ($showTrial) {
-            $keyboard[] = ['📚 راهنمای اتصال', '🧪 اکانت تست'];
-        } else {
-            $keyboard[] = ['📚 راهنمای اتصال'];
+            $keyboard[] = ['🧪 اکانت تست'];
         }
 
         $keyboard[] = ['📥 ورود اشتراک قبلی به ربات'];
