@@ -111,6 +111,13 @@ class ThemeSettings extends Page implements HasForms
                             Select::make('active_theme')->label('قالب اصلی سایت')->options([
                                 'welcome' => 'قالب خوش‌آمدگویی',
                                 'rocket' => 'قالب RoketVPN (موشکی)',
+                                'arcane' => 'قالب Arcane (جادویی)',
+                                'cyberpunk' => 'قالب سایبرپانک',
+                                'dragon' => 'قالب اژدها',
+                                'phoenix' => 'قالب ققنوس (آتشین)',
+                                'nebula' => 'قالب Nebula (کهکشانی)',
+                                'aurora' => 'قالب Aurora (روشن)',
+                                'obsidian' => 'قالب Obsidian (طلایی)',
                             ])->default('welcome')->live(),
                             Select::make('active_auth_theme')->label('قالب صفحات ورود/ثبت‌نام')->options([
                                 'default' => 'قالب پیش‌فرض (Breeze)',
@@ -178,6 +185,192 @@ class ThemeSettings extends Page implements HasForms
                             Textarea::make('cyberpunk_faq1_a')->label('پاسخ اول')->rows(2),
                             TextInput::make('cyberpunk_faq2_q')->label('سوال دوم')->placeholder('چگونه می‌توانم سرویس را روی چند دستگاه استفاده کنم؟'),
                             Textarea::make('cyberpunk_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Arcane')->icon('heroicon-o-sparkles')->visible(fn(Get $get) => $get('active_theme') === 'arcane')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('arcane_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('arcane_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('arcane_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('arcane_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('arcane_hero_button')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('arcane_features_title')->label('عنوان بخش'),
+                            TextInput::make('arcane_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('arcane_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('arcane_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('arcane_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('arcane_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('arcane_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('arcane_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('arcane_faq_title')->label('عنوان بخش'),
+                            TextInput::make('arcane_faq1_q')->label('سوال اول'),
+                            Textarea::make('arcane_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('arcane_faq2_q')->label('سوال دوم'),
+                            Textarea::make('arcane_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Dragon')->icon('heroicon-o-fire')->visible(fn(Get $get) => $get('active_theme') === 'dragon')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('dragon_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('dragon_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('dragon_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('dragon_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('dragon_hero_button_text')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('dragon_features_title')->label('عنوان بخش'),
+                            TextInput::make('dragon_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('dragon_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('dragon_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('dragon_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('dragon_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('dragon_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('dragon_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('dragon_faq_title')->label('عنوان بخش'),
+                            TextInput::make('dragon_faq1_q')->label('سوال اول'),
+                            Textarea::make('dragon_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('dragon_faq2_q')->label('سوال دوم'),
+                            Textarea::make('dragon_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Phoenix')->icon('heroicon-o-flame')->visible(fn(Get $get) => $get('active_theme') === 'phoenix')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('phoenix_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('phoenix_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('phoenix_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('phoenix_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('phoenix_hero_button')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('phoenix_features_title')->label('عنوان بخش'),
+                            TextInput::make('phoenix_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('phoenix_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('phoenix_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('phoenix_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('phoenix_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('phoenix_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('phoenix_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('phoenix_faq_title')->label('عنوان بخش'),
+                            TextInput::make('phoenix_faq1_q')->label('سوال اول'),
+                            Textarea::make('phoenix_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('phoenix_faq2_q')->label('سوال دوم'),
+                            Textarea::make('phoenix_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Nebula')->icon('heroicon-o-globe-alt')->visible(fn(Get $get) => $get('active_theme') === 'nebula')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('nebula_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('nebula_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('nebula_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('nebula_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('nebula_hero_button')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('nebula_features_title')->label('عنوان بخش'),
+                            TextInput::make('nebula_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('nebula_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('nebula_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('nebula_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('nebula_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('nebula_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('nebula_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('nebula_faq_title')->label('عنوان بخش'),
+                            TextInput::make('nebula_faq1_q')->label('سوال اول'),
+                            Textarea::make('nebula_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('nebula_faq2_q')->label('سوال دوم'),
+                            Textarea::make('nebula_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Aurora')->icon('heroicon-o-sun')->visible(fn(Get $get) => $get('active_theme') === 'aurora')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('aurora_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('aurora_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('aurora_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('aurora_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('aurora_hero_button')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('aurora_features_title')->label('عنوان بخش'),
+                            TextInput::make('aurora_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('aurora_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('aurora_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('aurora_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('aurora_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('aurora_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('aurora_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('aurora_faq_title')->label('عنوان بخش'),
+                            TextInput::make('aurora_faq1_q')->label('سوال اول'),
+                            Textarea::make('aurora_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('aurora_faq2_q')->label('سوال دوم'),
+                            Textarea::make('aurora_faq2_a')->label('پاسخ دوم')->rows(2),
+                        ]),
+                    ]),
+
+                    Tabs\Tab::make('محتوای قالب Obsidian')->icon('heroicon-o-cube-transparent')->visible(fn(Get $get) => $get('active_theme') === 'obsidian')->schema([
+                        Section::make('عمومی')->schema([
+                            TextInput::make('obsidian_navbar_brand')->label('نام برند در Navbar'),
+                            TextInput::make('obsidian_footer_text')->label('متن فوتر'),
+                        ])->columns(2),
+                        Section::make('بخش اصلی')->schema([
+                            TextInput::make('obsidian_hero_title')->label('تیتر اصلی'),
+                            Textarea::make('obsidian_hero_subtitle')->label('زیرتیتر')->rows(2),
+                            TextInput::make('obsidian_hero_button')->label('متن دکمه'),
+                        ]),
+                        Section::make('ویژگی‌ها')->schema([
+                            TextInput::make('obsidian_features_title')->label('عنوان بخش'),
+                            TextInput::make('obsidian_feature1_title')->label('ویژگی ۱'),
+                            Textarea::make('obsidian_feature1_desc')->label('توضیح ۱')->rows(2),
+                            TextInput::make('obsidian_feature2_title')->label('ویژگی ۲'),
+                            Textarea::make('obsidian_feature2_desc')->label('توضیح ۲')->rows(2),
+                            TextInput::make('obsidian_feature3_title')->label('ویژگی ۳'),
+                            Textarea::make('obsidian_feature3_desc')->label('توضیح ۳')->rows(2),
+                        ])->columns(2),
+                        Section::make('قیمت‌گذاری')->schema([
+                            TextInput::make('obsidian_pricing_title')->label('عنوان بخش'),
+                        ]),
+                        Section::make('سوالات متداول')->schema([
+                            TextInput::make('obsidian_faq_title')->label('عنوان بخش'),
+                            TextInput::make('obsidian_faq1_q')->label('سوال اول'),
+                            Textarea::make('obsidian_faq1_a')->label('پاسخ اول')->rows(2),
+                            TextInput::make('obsidian_faq2_q')->label('سوال دوم'),
+                            Textarea::make('obsidian_faq2_a')->label('پاسخ دوم')->rows(2),
                         ]),
                     ]),
 

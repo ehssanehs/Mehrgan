@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;800;900&display=swap');
+
+:root {
+    --obsidian-bg: #060608;
+    --obsidian-deep: #0a0a12;
+    --obsidian-card: rgba(15, 15, 24, 0.85);
+    --obsidian-gold: #e6b84d;
+    --obsidian-gold-soft: rgba(230, 184, 77, 0.12);
+    --obsidian-text: #f0ebe5;
+    --obsidian-muted: #b0a898;
+    --obsidian-border: rgba(230, 184, 77, 0.15);
+    --obsidian-gradient: linear-gradient(135deg, #060608 0%, #0f0c18 50%, #08050e 100%);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Vazirmatn', sans-serif;
+    direction: rtl;
+    background: var(--obsidian-gradient);
+    color: var(--obsidian-text);
+    overflow-x: hidden;
+}
+
+.content-wrapper { position: relative; z-index: 1; }
+
+.navbar {
+    background: rgba(6, 6, 8, 0.7) !important;
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--obsidian-border);
+    padding: 1rem 0;
+}
+
+.navbar-brand {
+    font-weight: 900;
+    background: linear-gradient(45deg, #e6b84d, #f2d78a);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-size: 1.6rem;
+}
+
+.hero-section {
+    min-height: 95vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 5rem 1rem;
+    position: relative;
+}
+
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 30%; left: 50%;
+    width: 500px; height: 500px;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(230, 184, 77, 0.12) 0%, transparent 70%);
+    border-radius: 50%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.hero-section .container { position: relative; z-index: 2; }
+
+.obsidian-title {
+    font-size: 3.5rem;
+    font-weight: 900;
+    line-height: 1.15;
+    color: var(--obsidian-text);
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 80px rgba(230, 184, 77, 0.15);
+}
+
+.hero-subtitle {
+    color: var(--obsidian-muted);
+    font-size: 1.1rem;
+    max-width: 640px;
+    margin: 1.25rem auto 2rem auto;
+    line-height: 1.8;
+}
+
+.btn-obsidian {
+    display: inline-block;
+    padding: 0.9rem 2.75rem;
+    border-radius: 50px;
+    font-weight: 700;
+    text-decoration: none;
+    color: #060608;
+    background: linear-gradient(135deg, var(--obsidian-gold), #f2d78a);
+    box-shadow: 0 8px 30px rgba(230, 184, 77, 0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn-obsidian:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 40px rgba(230, 184, 77, 0.45);
+    color: #060608;
+}
+
+.section-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    margin-bottom: 3rem;
+    color: var(--obsidian-text);
+    position: relative;
+    display: inline-block;
+}
+
+.section-title::after {
+    content: '';
+    display: block;
+    width: 60px; height: 4px;
+    background: linear-gradient(90deg, var(--obsidian-gold), #f2d78a);
+    border-radius: 2px;
+    margin: 0.75rem auto 0 auto;
+}
+
+.obsidian-card {
+    background: var(--obsidian-card);
+    border: 1px solid var(--obsidian-border);
+    border-radius: 1.25rem;
+    padding: 2.25rem 1.75rem;
+    backdrop-filter: blur(12px);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.obsidian-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 50px rgba(230, 184, 77, 0.15);
+    border-color: rgba(230, 184, 77, 0.3);
+}
+
+.obsidian-card .icon-glow {
+    font-size: 2.25rem;
+    margin-bottom: 1rem;
+    display: inline-block;
+    color: var(--obsidian-gold);
+    text-shadow: 0 0 20px rgba(230, 184, 77, 0.5);
+}
+
+.obsidian-card h4 {
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: var(--obsidian-text);
+}
+
+.obsidian-card p {
+    color: var(--obsidian-muted);
+    line-height: 1.7;
+    font-size: 0.95rem;
+}
+
+.pricing-card.obsidian-card {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.pricing-card .display-price {
+    font-size: 3rem;
+    font-weight: 900;
+    color: var(--obsidian-text);
+    line-height: 1;
+}
+
+.pricing-card .display-price span {
+    font-size: 1rem;
+    color: var(--obsidian-muted);
+    font-weight: 500;
+}
+
+.accordion-button.obsidian-accordion-btn {
+    background: var(--obsidian-card);
+    border: 1px solid var(--obsidian-border);
+    border-radius: 0.75rem;
+    color: var(--obsidian-text);
+    font-weight: 700;
+    padding: 1rem 1.25rem;
+}
+
+.accordion-body {
+    color: var(--obsidian-muted);
+    padding: 1rem 1.25rem;
+}
+
+.footer {
+    border-top: 1px solid var(--obsidian-border);
+    padding: 3rem 0 1.5rem 0;
+    margin-top: 5rem;
+    text-align: center;
+    color: var(--obsidian-muted);
+    font-size: 0.9rem;
+}
+
+.footer a { color: var(--obsidian-gold); text-decoration: none; }
+.footer a:hover { text-decoration: underline; }
