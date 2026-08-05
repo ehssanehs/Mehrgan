@@ -718,9 +718,9 @@ class WebhookController extends BaseController
                     $this->handleAgentMenu($user);
                 }
                 break;
-            case '🔐 اطلاعات ورود به سایت':
-                $this->sendSiteCredentials($user);
-                break;
+            // case '🔐 اطلاعات ورود به سایت':
+            //     $this->sendSiteCredentials($user);
+            //     break;
             case '📥 Import Existing Subscription':
             case 'Import Existing Subscription':
                 $this->showImportPrompt($user);
@@ -5014,9 +5014,7 @@ class WebhookController extends BaseController
         $keyboard[] = ['📥 Import Existing Subscription'];
 
         if ($showReseller) {
-            $keyboard[] = ['🏢 نمایندگی', '🔐 اطلاعات ورود به سایت'];
-        } else {
-            $keyboard[] = ['🔐 اطلاعات ورود به سایت'];
+            $keyboard[] = ['🏢 نمایندگی'];
         }
 
         return Keyboard::make([
