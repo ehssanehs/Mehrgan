@@ -1,264 +1,313 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/logo.png" width="320" alt="Mehrgan logo">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/logo.png" width="320" alt="لوگوی مهرگان">
 </p>
 
-<h1 align="center">Mehrgan</h1>
+<h1 align="center">مهرگان (Mehrgan)</h1>
 
 <p align="center">
-  A Persian-first VPN subscription storefront, Telegram sales bot, and administration panel for Marzban, Sanaei/X-UI, and PasarGuard.
+  فروشگاه و پنل مدیریت سرویس‌های VPN با پشتیبانی از مرزبان، Sanaei/X-UI و PasarGuard
 </p>
 
 <p align="center">
   <a href="https://github.com/ehssanehs/Mehrgan"><img src="https://img.shields.io/badge/Laravel-12.x-ff2d20?style=for-the-badge&logo=laravel" alt="Laravel 12"></a>
   <a href="https://www.php.net/"><img src="https://img.shields.io/badge/PHP-8.3%2B-777bb4?style=for-the-badge&logo=php&logoColor=white" alt="PHP 8.3+"></a>
   <a href="https://filamentphp.com/"><img src="https://img.shields.io/badge/Filament-3.x-f59e0b?style=for-the-badge" alt="Filament 3"></a>
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="MIT license"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge" alt="مجوز MIT"></a>
 </p>
 
-> **Language note:** the application UI and most administration labels are Persian by default. This README is in English so that deployment and integration details are easier to follow.
+> رابط کاربری پروژه و بیشتر بخش‌های پنل به‌صورت پیش‌فرض فارسی است.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel1.PNG" width="45%" alt="Mehrgan dashboard">
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel2.PNG" width="45%" alt="Mehrgan user management">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel1.PNG" width="45%" alt="داشبورد مهرگان">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel2.PNG" width="45%" alt="مدیریت کاربران مهرگان">
   <br>
-  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel3.PNG" width="90%" alt="Mehrgan server settings">
+  <img src="https://raw.githubusercontent.com/ehssanehs/Mehrgan/main/github/github/panel3.PNG" width="90%" alt="تنظیمات سرور مهرگان">
 </p>
 
-## Contents
+## فهرست مطالب
 
-- [What Mehrgan does](#what-mehrgan-does)
-- [Feature overview](#feature-overview)
-- [Architecture and modules](#architecture-and-modules)
-- [Requirements](#requirements)
-- [Deployment options](#deployment-options)
-  - [Automated Ubuntu deployment](#1-automated-ubuntu-deployment)
-  - [Manual production deployment](#2-manual-production-deployment)
-- [First-time configuration](#first-time-configuration)
-- [Configure a VPN panel](#configure-a-vpn-panel)
-- [Configure Telegram](#configure-telegram)
-- [Payments and orders](#payments-and-orders)
-- [Updates and server operations](#updates-and-server-operations)
-- [Backups and restore](#backups-and-restore)
-- [Testing and development](#testing-and-development)
-- [Routes and APIs](#routes-and-apis)
-- [Environment configuration](#environment-configuration)
-- [Security and known limitations](#security-and-known-limitations)
-- [Support and contribution](#support-and-contribution)
+- [مهرگان چیست؟](#مهرگان-چیست)
+- [امکانات](#امکانات)
+- [ساختار پروژه](#ساختار-پروژه)
+- [پیش‌نیازها](#پیشنیازها)
+- [روش‌های نصب](#روشهای-نصب)
+  - [نصب خودکار در Ubuntu](#۱-نصب-خودکار-در-ubuntu)
+  - [نصب دستی روی سرور](#۲-نصب-دستی-روی-سرور)
+- [تنظیمات اولیه بعد از نصب](#تنظیمات-اولیه-بعد-از-نصب)
+- [اتصال پنل VPN](#اتصال-پنل-vpn)
+- [راه‌اندازی ربات تلگرام](#راهاندازی-ربات-تلگرام)
+- [پرداخت و سفارش](#پرداخت-و-سفارش)
+- [آپدیت و مدیریت سرور](#آپدیت-و-مدیریت-سرور)
+- [بکاپ و بازیابی](#بکاپ-و-بازیابی)
+- [تست و توسعه](#تست-و-توسعه)
+- [مسیرها و APIها](#مسیرها-و-apiها)
+- [تنظیمات محیطی](#تنظیمات-محیطی)
+- [نکات امنیتی و محدودیت‌ها](#نکات-امنیتی-و-محدودیتها)
+- [پشتیبانی](#پشتیبانی)
 
-## What Mehrgan does
+## مهرگان چیست؟
 
-Mehrgan is a Laravel application for selling and operating VPN subscriptions from one place. It combines:
+مهرگان یک نرم‌افزار کامل برای فروش و مدیریت سرویس‌های VPN است. این پروژه بخش‌های زیر را در یک سیستم جمع می‌کند:
 
-- A public pricing and checkout website.
-- A Filament administration panel at `/admin`.
-- A Telegram bot for purchases, service delivery, support, referrals, and account management.
-- Multi-server routing with location, capacity, panel type, and output-link selection.
-- Direct API provisioning for Marzban, Sanaei/X-UI, and PasarGuard.
-- Customer, reseller, wallet, referral, ticket, blog, backup, and module-management features.
+- سایت فروش و نمایش پلن‌ها.
+- پنل مدیریت Filament در مسیر `/admin`.
+- ربات تلگرام برای خرید، تحویل لینک، پشتیبانی و مدیریت حساب.
+- مدیریت چند سرور، لوکیشن و ظرفیت.
+- اتصال مستقیم به پنل‌های Marzban، Sanaei/X-UI و PasarGuard.
+- کیف پول، پرداخت، کد تخفیف، سیستم دعوت، تیکت، وبلاگ، نمایندگی و بکاپ.
 
-The repository contains the web application and its server-side integrations. It does **not** contain a native Android, iOS, or Windows client; the Telegram bot can display connection tutorials for V2RayNG, V2Box/Streisand, and V2RayN.
+این مخزن شامل سایت و سرویس‌های سمت سرور است. اپلیکیشن native اندروید، iOS یا ویندوز داخل این مخزن وجود ندارد؛ ربات تلگرام فقط آموزش اتصال با V2RayNG، V2Box/Streisand و V2RayN را نمایش می‌دهد.
 
-## Feature overview
+## امکانات
 
-### Customer website and account area
+### سایت و حساب کاربری
 
-- Persian-ready public storefront with active plans, pricing, features, duration, volume, and popular-plan presentation.
-- Nine selectable public/authentication/admin themes:
-  `welcome`, `rocket`, `arcane`, `cyberpunk`, `dragon`, `phoenix`, `nebula`, `aurora`, and `obsidian`.
-- Registration, login, logout, password reset, password confirmation, and email-verification flows from Laravel Breeze.
-- Customer dashboard with:
-  - Active and recently expired services.
-  - Connection/subscription links and expiry dates.
-  - Renewal actions and renewal notifications.
-  - Wallet balance and transaction history.
-  - Order history and payment status.
-  - Notifications with mark-read, mark-all-read, and delete actions.
-  - Support tickets and replies.
-- Profile update and account deletion.
-- Admin-enforced account banning and unbanning. A banned user is logged out of the website and blocked in the Telegram bot.
+- صفحه اصلی با نمایش پلن‌های فعال، قیمت، حجم، مدت و امکانات.
+- ۹ قالب قابل انتخاب برای سایت، صفحات ورود و پنل مدیریت:
+  `welcome`، `rocket`، `arcane`، `cyberpunk`، `dragon`، `phoenix`، `nebula`، `aurora` و `obsidian`.
+- ثبت‌نام، ورود، خروج، فراموشی رمز، تغییر رمز و صفحات تأیید ایمیل.
+- داشبورد کاربر شامل:
+  - سرویس‌های فعال و سرویس‌هایی که به‌تازگی منقضی شده‌اند.
+  - لینک اتصال و تاریخ انقضا.
+  - تمدید سرویس.
+  - کیف پول و تاریخچه تراکنش‌ها.
+  - تاریخچه سفارش‌ها و وضعیت پرداخت.
+  - اعلان‌ها و علامت‌گذاری اعلان‌های خوانده‌شده.
+  - تیکت‌های پشتیبانی.
+- ویرایش پروفایل و حذف حساب.
+- امکان مسدودسازی و رفع مسدودی کاربران توسط مدیر. کاربر مسدودشده هم از سایت و هم از ربات تلگرام خارج می‌شود.
 
-### Plans, orders, and provisioning
+### پلن، سفارش و ساخت سرویس
 
-- Plans are configured by name, price, traffic volume in GB, duration in days, features, popularity, active status, and supported server type.
-- Multi-server orders can be routed by country/location, capacity, and panel type.
-- The system chooses an available server when a customer has not selected one explicitly.
-- Service provisioning creates or updates the customer on the target VPN panel and stores the resulting connection data on the order.
-- Renewal keeps the original panel username and updates the existing panel account where the integration supports it.
-- Admins can inspect and edit stored order connection data from the user-management view. Changes made there update Mehrgan's database only; they do not automatically change the remote panel.
-- Sequential client naming is available with an admin-configurable prefix and concurrency-safe counter. Custom usernames still take precedence.
+- ساخت پلن با نام، قیمت، حجم به گیگابایت، مدت به روز، امکانات، وضعیت فعال و پلن محبوب.
+- محدود کردن پلن به نوع سرور مشخص.
+- انتخاب سرور بر اساس لوکیشن و ظرفیت.
+- انتخاب خودکار سرور دارای ظرفیت در صورت انتخاب نکردن سرور توسط کاربر.
+- ساخت یا بروزرسانی کاربر در پنل VPN و ذخیره لینک در سفارش.
+- تمدید سرویس روی همان نام کاربری قبلی، در صورت پشتیبانی پنل.
+- مشاهده و ویرایش اطلاعات ذخیره‌شده سرویس از پنل مدیریت.
 
-### Supported VPN panels
+> ویرایش لینک در پنل مهرگان فقط اطلاعات دیتابیس مهرگان را تغییر می‌دهد و پنل VPN از راه دور را تغییر نمی‌دهد.
 
-| Panel | Supported operations | Output / notes |
+### پنل‌های VPN پشتیبانی‌شده
+
+| پنل | امکانات | نوع لینک |
 |---|---|---|
-| **Sanaei / X-UI** | Login, inbound lookup, client creation, update, traffic reset, client disable, UUID search | Single VLESS link, subscription URL, or tunneled VLESS link. Sanaei is handled by the X-UI integration. |
-| **Marzban** | Token login, user creation, update, lookup, traffic reset, disable, UUID search | Uses the panel's subscription URL and optional node hostname. |
-| **PasarGuard** | Token login, user creation, update, lookup, traffic reset, disable, UUID search | Uses the panel's subscription URL and optional node hostname. |
+| **Sanaei / X-UI** | ورود، دریافت اینباند، ساخت کاربر، ویرایش، ریست مصرف، غیرفعال‌سازی و جستجوی UUID | لینک تکی VLESS، لینک سابسکریپشن یا لینک تونل‌شده |
+| **Marzban** | ورود با توکن، ساخت و ویرایش کاربر، دریافت اطلاعات، ریست مصرف، غیرفعال‌سازی و جستجوی UUID | لینک سابسکریپشن پنل و Node Hostname اختیاری |
+| **PasarGuard** | ورود با توکن، ساخت و ویرایش کاربر، دریافت اطلاعات، ریست مصرف، غیرفعال‌سازی و جستجوی UUID | لینک سابسکریپشن پنل و Node Hostname اختیاری |
 
-Both the modern `MultiServer` records and legacy single-panel settings are supported. MultiServer configuration is the recommended path for new installations. The current service-plan form exposes `all`, `xui`, and `marzban` as plan filters; if you need a PasarGuard-only plan, use `all` or extend the plan enum/form before restricting it.
+هم تنظیمات جدید MultiServer و هم تنظیمات قدیمی تک‌سرور پشتیبانی می‌شوند. برای نصب جدید، استفاده از MultiServer پیشنهاد می‌شود.
 
-### Payments, wallets, and discounts
+در فرم فعلی پلن‌ها، فیلتر نوع سرور شامل `all`، `xui` و `marzban` است. سرویس‌های PasarGuard در بخش‌های اتصال و نمایندگی پشتیبانی می‌شوند؛ برای ساخت پلن اختصاصی PasarGuard باید این محدودیت فرم/enum را در صورت نیاز توسعه دهید.
 
-- **Card-to-card payment:** the admin configures one or more bank cards; a card is selected for the customer, who uploads a receipt. An admin approves or rejects the receipt.
-- **Wallet:** customers can request a wallet top-up by card receipt, wait for manual approval, and use their balance for instant service purchases and renewals.
-- **Manual wallet adjustment:** admins can credit or debit a customer's wallet and record a reason. The customer can also be notified in Telegram.
-- **Discount codes:** fixed or percentage discounts with optional maximum discount, total/per-user usage limits, minimum order amount, start/end dates, plan restrictions, wallet restriction, renewal restriction, and active/inactive status.
-- **Order review:** admins can approve, reject, and, when necessary, disable an already-created remote VPN account during rejection.
-- **NOWPayments webhook endpoint:** `/webhooks/nowpayments` accepts selected NOWPayments statuses and records the payment ID/status. See the limitations section before using it as a fully automated production payment flow.
-- **Crypto checkout:** the current website action is an informational placeholder and is not a complete payment gateway.
+### پرداخت، کیف پول و تخفیف
 
-### Telegram bot
+- پرداخت کارت‌به‌کارت با امکان تعریف چند کارت بانکی.
+- نمایش تصادفی یکی از کارت‌ها به کاربر.
+- ارسال تصویر رسید پرداخت و بررسی آن توسط مدیر.
+- شارژ کیف پول با رسید و تأیید مدیر.
+- خرید و تمدید سریع با موجودی کیف پول.
+- افزایش یا کاهش دستی موجودی کاربر توسط مدیر همراه با ثبت توضیح.
+- کد تخفیف درصدی یا مبلغ ثابت.
+- محدودیت تعداد استفاده کلی و تعداد استفاده هر کاربر.
+- حداقل مبلغ سفارش و سقف تخفیف.
+- زمان شروع و پایان کد تخفیف.
+- محدود کردن کد به پلن‌های مشخص، شارژ کیف پول یا تمدید.
+- وب‌هوک NOWPayments در مسیر `/webhooks/nowpayments`.
+- گزینه پرداخت ارز دیجیتال در وضعیت فعلی فقط اطلاع‌رسانی است و درگاه کامل محسوب نمی‌شود.
 
-The bot is webhook-based and supports both reply and inline keyboards. Main user flows include:
+### ربات تلگرام
 
-- `/start` registration and referral deep links such as `/start REF-ABC123`.
-- Service plan browsing by duration and traffic volume.
-- Location/server selection and username selection.
-- Automatic sequential usernames when that feature is enabled.
-- Wallet balance, wallet top-up instructions, transaction history, and wallet purchases.
-- Card-to-card payment instructions and receipt-photo submission.
-- Service list, service details, renewal, copy-link buttons, and QR codes.
-- Delivery of the connection link after an order is approved, including long subscription splitting when a Telegram message would be too large.
-- Existing-subscription import from a VLESS URI or an HTTP(S) subscription URL.
-- Trial account creation with configurable volume, duration, per-user limit, server, copy link, and QR code.
-- Referral link and referral earnings.
-- FAQ and Android/iOS/Windows connection tutorials.
-- Support-ticket creation, replies, attachments, and ticket notifications.
-- Optional forced membership in a Telegram channel before the bot can be used.
-- Reseller/agent registration, wallet status, account creation, and reports when the reseller module is enabled.
-- Admin payment approval/rejection, ticket replies, broadcasts, and user notifications.
+ربات تلگرام از Webhook، کیبورد معمولی و Inline Keyboard استفاده می‌کند و امکانات زیر را دارد:
 
-Telegram bot content, deposit amounts, tutorial text, welcome/start messages, FAQ records, admin chat IDs, and feature buttons are managed from Filament.
+- ثبت‌نام خودکار کاربر با `/start`.
+- لینک دعوت تلگرام مانند `/start REF-ABC123`.
+- نمایش پلن‌ها بر اساس مدت و حجم.
+- انتخاب لوکیشن و سرور.
+- انتخاب نام کاربری یا تولید نام ترتیبی.
+- مشاهده موجودی و تاریخچه تراکنش‌ها.
+- شارژ کیف پول و خرید با کیف پول.
+- پرداخت کارت‌به‌کارت و ارسال تصویر رسید.
+- مشاهده سرویس‌ها، لینک اتصال، تمدید و QR Code.
+- ارسال خودکار لینک سرویس پس از تأیید سفارش.
+- تقسیم لینک‌های طولانی در چند پیام تلگرام.
+- وارد کردن اشتراک قبلی با VLESS یا Subscription URL.
+- ساخت اکانت تست با حجم، مدت و محدودیت قابل تنظیم.
+- سیستم دعوت و نمایش درآمد دعوت.
+- سوالات متداول و آموزش اتصال اندروید، iOS و ویندوز.
+- ساخت تیکت، پاسخ به تیکت و ارسال پیوست.
+- اجبار عضویت در کانال تلگرام.
+- ثبت‌نام و امکانات نمایندگی.
+- تأیید یا رد پرداخت و پاسخ به تیکت توسط ادمین.
+- ارسال پیام همگانی از طریق صف پردازش.
 
-### Existing subscription import
+متن خوش‌آمدگویی، متن آموزش‌ها، FAQ، مبالغ شارژ، Chat ID مدیران و نمایش دکمه‌های ربات از پنل مدیریت قابل تنظیم است.
 
-Customers can import a subscription from the website at `/subscription/import` or through the Telegram bot.
+### وارد کردن اشتراک قبلی
 
-Supported input:
+کاربر می‌تواند از سایت، در مسیر `/subscription/import`، یا از ربات تلگرام اشتراک قبلی خود را وارد کند.
 
-1. A single `vless://...` URI.
-2. An `http://` or `https://` subscription URL whose response contains VLESS entries, either as plain text or base64-encoded content.
+ورودی‌های قابل قبول:
 
-Import behavior:
+1. یک لینک تکی `vless://...`.
+2. یک لینک `http://` یا `https://` که محتوای آن شامل لینک‌های VLESS باشد.
 
-1. Validate and detect the input type.
-2. Fetch and decode the subscription when necessary.
-3. Use the UUID from the **first** valid VLESS entry.
-4. Reject invalid UUIDs and duplicate paid imports.
-5. Search active MultiServer records and legacy X-UI, Marzban, and PasarGuard configuration.
-6. Read the remote username, traffic, usage, expiry, panel metadata, and subscription link.
-7. Create a paid imported order and match it to an active plan when possible.
+مراحل وارد کردن:
 
-The importer includes input-length limits, HTTP/HTTPS-only validation, timeout handling, localhost/private-IP checks, and DNS-resolution checks intended to reduce SSRF risk. The API-style website endpoint is `POST /subscription/import/api` and still requires an authenticated web session.
+1. تشخیص نوع ورودی و اعتبارسنجی آن.
+2. دریافت محتوای Subscription URL.
+3. Decode کردن Base64 در صورت نیاز.
+4. استفاده از UUID اولین لینک VLESS معتبر.
+5. جلوگیری از وارد کردن UUID تکراری.
+6. جستجو در سرورهای فعال MultiServer و تنظیمات قدیمی X-UI، Marzban و PasarGuard.
+7. خواندن نام کاربری، حجم، مصرف، تاریخ انقضا و لینک اشتراک از پنل.
+8. ساخت یک سفارش پرداخت‌شده برای کاربر.
 
-### Referral system
+برای کاهش خطر SSRF، ورودی حداکثر ۱۰٬۰۰۰ کاراکتر است، فقط HTTP/HTTPS قبول می‌شود و localhost و IPهای خصوصی بررسی و مسدود می‌شوند. مسیر API سایت این قابلیت `POST /subscription/import/api` است و همچنان به ورود کاربر نیاز دارد.
 
-- Unique referral codes are generated for users.
-- Referral links work in the website/bot registration flow and Telegram `/start` deep links.
-- Admins can enable/disable referrals, configure a fixed reward, percentage reward, welcome gift, minimum purchase amount, first-purchase-only behavior, and duplicate-IP protection for the welcome gift.
-- Optional Telegram notifications are sent when a referred user joins or completes a qualifying purchase.
-- Referral reports show registrations, successful referrals, earnings, and wallet balance.
+### نام‌گذاری ترتیبی کلاینت‌ها
 
-### Trial accounts and QR codes
+از پنل مدیریت می‌توان نام‌گذاری ترتیبی را فعال کرد:
 
-- Admins can enable trial accounts and set the traffic limit in MB, duration in hours, per-user limit, and optional trial server.
-- The Telegram bot creates a temporary account using the configured panel path, stores the link briefly in cache, and offers copy-link and QR-code actions.
-- Purchased services and reseller accounts also expose QR-code functionality where a connection/subscription URL is available.
+- فعال یا غیرفعال‌سازی سیستم.
+- تعیین پیشوند، مانند `server1u`.
+- مشاهده شمارنده فعلی و نام بعدی.
+- ریست شمارنده.
+- جلوگیری از تکرار شماره با قفل دیتابیس.
+- تغییر پیشوند باعث شروع شمارنده از ۱ می‌شود.
+- نام سفارشی کاربر همیشه اولویت دارد.
+- اگر سیستم خاموش باشد، الگوی قدیمی `user-{id}-order-{id}` استفاده می‌شود.
 
-### Support, notifications, and content
+### سیستم دعوت
 
-- Ticketing supports priorities, open/answered/closed states, web replies, Telegram replies, and JPG/JPEG/PNG/PDF/ZIP attachments up to 5 MB.
-- Ticket replies can notify the user through Telegram.
-- The blog module provides `/blog`, published post listing, slug pages, categories, related posts, view counters, featured images, rich content, scheduled publication, and SEO fields.
-- Admin broadcast messages are dispatched through the queue so large Telegram audiences do not block a web request.
-- The profit report filters successful plan orders by date and shows order type, source, payment method, plan, username, and total amount.
+- ساخت کد دعوت یکتا برای کاربران.
+- لینک دعوت در سایت و ربات تلگرام.
+- پاداش ثابت یا درصدی برای معرف.
+- هدیه خوش‌آمدگویی برای کاربر جدید.
+- پاداش فقط برای اولین خرید موفق.
+- حداقل مبلغ خرید برای دریافت پاداش.
+- بررسی IP تکراری برای جلوگیری از سوءاستفاده از هدیه.
+- ارسال اعلان تلگرام برای معرف و کاربر جدید.
+- گزارش تعداد ثبت‌نام، خرید موفق، درآمد و موجودی کیف پول.
 
-### Reseller and agent operations
+### اکانت تست و QR Code
 
-The `Reseller` module provides a separate VPN resale domain:
+- فعال یا غیرفعال کردن اکانت تست.
+- تعیین سرور مخصوص تست.
+- تعیین حجم به MB، مدت به ساعت و تعداد دفعات مجاز هر کاربر.
+- ساخت لینک تست از ربات تلگرام.
+- کپی لینک و دریافت QR Code.
+- ساخت QR Code برای سرویس‌های خریداری‌شده و اکانت‌های نمایندگی در صورت وجود لینک.
 
-- Reseller plans with quota-based or pay-as-you-go pricing.
-- Reseller applications, approval/rejection, optional payment receipt, and Telegram status notifications.
-- Reseller wallets and wallet transactions.
-- VPN server and product catalogs for Sanaei/X-UI, Marzban, and PasarGuard.
-- Background account creation jobs with retries and automatic refunds after permanent failure.
-- Product traffic, period, protocol, inbound/tag, and reseller price configuration.
-- Reseller account status, expiry, subscription URL, raw server response, and QR-code API output.
-- Sanctum API endpoints under `/api/v1/reseller`.
+### تیکت، اعلان و وبلاگ
 
-The repository also retains the older `Agent`, `AgentServer`, and `AgentTransaction` administration models for compatibility with earlier agent workflows.
+- تیکت پشتیبانی با اولویت کم، متوسط و زیاد.
+- وضعیت‌های باز، پاسخ‌داده‌شده و بسته‌شده.
+- پاسخ از سایت یا تلگرام.
+- پیوست JPG، PNG، PDF و ZIP تا حجم ۵ مگابایت.
+- ارسال اعلان پاسخ تیکت در تلگرام.
+- وبلاگ در مسیر `/blog`.
+- دسته‌بندی، اسلاگ، تصویر شاخص، محتوای Rich Editor و پست‌های مرتبط.
+- زمان‌بندی انتشار و فیلدهای SEO.
+- شمارش بازدید پست‌ها.
+- ارسال پیام همگانی تلگرام با استفاده از Queue.
+- گزارش سود و فروش بر اساس بازه زمانی.
 
-### Backups and modules
+### نمایندگی و فروشنده‌ها
 
-- `MatinBackup` creates ZIP backups containing a MySQL dump, metadata, and `storage/app/public` files.
-- Backups can be created, uploaded, downloaded, restored, and deleted from Filament.
-- Backups can be sent to one or more configured Telegram admin chat IDs.
-- A daily scheduled command, `backup:daily-telegram`, is registered by the module.
-- The module manager can install a ZIP module, scan modules, enable/disable a module, or remove a module.
-- Nwidart Laravel Modules provides the module discovery and activation system.
+ماژول `Reseller` امکانات زیر را دارد:
 
-## Architecture and modules
+- پلن نمایندگی سهمیه‌ای یا پرداخت به‌ازای هر اکانت.
+- ثبت درخواست نمایندگی و تأیید یا رد توسط مدیر.
+- کیف پول نماینده و تراکنش‌های آن.
+- تعریف سرور و محصول VPN برای نماینده.
+- پشتیبانی از Sanaei/X-UI، Marzban و PasarGuard در سرویس نمایندگی.
+- ساخت اکانت در Queue با چند بار تلاش مجدد.
+- برگشت خودکار مبلغ در صورت شکست دائمی ساخت اکانت.
+- ذخیره وضعیت، تاریخ انقضا، لینک اشتراک و پاسخ خام پنل.
+- ساخت QR Code برای اکانت نماینده.
+- API نمایندگی در مسیر `/api/v1/reseller`.
 
-Mehrgan is a Laravel 12 monolith with a modular feature layer:
+مدل‌های قدیمی `Agent`، `AgentServer` و `AgentTransaction` نیز برای سازگاری در پروژه باقی مانده‌اند.
+
+### بکاپ و مدیریت ماژول‌ها
+
+- ساخت فایل ZIP شامل Dump دیتابیس، اطلاعات نسخه و فایل‌های `storage/app/public`.
+- ساخت، آپلود، دانلود، بازیابی و حذف بکاپ از پنل مدیریت.
+- ارسال بکاپ به یک یا چند Chat ID تلگرام مدیر.
+- اجرای روزانه دستور `backup:daily-telegram` با Laravel Scheduler.
+- نصب ماژول ZIP از پنل.
+- فعال‌سازی، غیرفعال‌سازی و حذف ماژول‌ها.
+- مدیریت ماژول‌ها با `nwidart/laravel-modules`.
+
+## ساختار پروژه
 
 ```text
-app/                         Core models, services, controllers, jobs, traits
+app/                         کدهای اصلی، مدل‌ها، سرویس‌ها و کنترلرها
 Modules/
-  Blog/                      Public blog and Filament content management
-  MatinBackup/               Backup UI, service, and scheduled Telegram backup
-  MultiServer/               Locations, servers, capacity, and panel routing
-  Referral/                  Referral reporting and referral integration
-  Reseller/                  Reseller plans, wallets, products, accounts, APIs
-  TelegramBot/               Telegram webhook, menus, FAQ, and bot settings
-  Ticketing/                 Web/Telegram support tickets and notifications
-database/migrations/         Core database schema and feature migrations
-resources/views/             Blade views, dashboard, payments, auth, themes
-public/themes/               Public theme templates and theme assets
-routes/                      Core web/auth/console routes
-install.sh                   Interactive multi-instance Ubuntu installer
-update.sh                    Per-instance update script
-manage.sh                    Per-instance worker/status helper
-uninstall.sh                 Destructive per-instance removal script
+  Blog/                      وبلاگ و مدیریت محتوای آن
+  MatinBackup/               بکاپ و ارسال بکاپ به تلگرام
+  MultiServer/               لوکیشن، سرور، ظرفیت و اتصال پنل‌ها
+  Referral/                  گزارش و منطق سیستم دعوت
+  Reseller/                  نمایندگی، کیف پول، محصول و API
+  TelegramBot/               وب‌هوک و منطق ربات تلگرام
+  Ticketing/                 تیکت پشتیبانی
+ database/migrations/        مایگریشن‌های دیتابیس
+ resources/views/            قالب‌ها، داشبورد، پرداخت و احراز هویت
+ public/themes/              قالب‌های ظاهری سایت
+ routes/                     مسیرهای سایت و احراز هویت
+ install.sh                  نصب خودکار چند نمونه
+ update.sh                   آپدیت یک نمونه
+ manage.sh                   مدیریت Workerها
+ uninstall.sh                حذف کامل یک نمونه
 ```
 
-All modules are enabled in the repository's `modules_statuses.json` by default. Enabled module resources are discovered automatically by the Filament admin panel.
+تمام ماژول‌های موجود در `modules_statuses.json` در حالت پیش‌فرض فعال هستند و Resourceهای آن‌ها به‌صورت خودکار در Filament شناسایی می‌شوند.
 
-## Requirements
+## پیش‌نیازها
 
-### Application runtime
+### نرم‌افزارهای موردنیاز
 
-- Ubuntu 22.04 is the target of the bundled installer. Other Linux distributions can work with equivalent packages.
-- PHP **8.3 or newer** with at least:
-  `bcmath`, `curl`, `dom`, `gd`, `intl`, `mbstring`, `mysql`/PDO MySQL, `redis`, `xml`, and `zip`.
+- Ubuntu 22.04 برای استفاده از اسکریپت نصب خودکار.
+- PHP نسخه **8.3 یا بالاتر** با افزونه‌های زیر:
+  `bcmath`، `curl`، `dom`، `gd`، `intl`، `mbstring`، `PDO MySQL`، `redis`، `xml` و `zip`.
 - Composer 2.
-- Node.js LTS and npm.
-- MySQL 8+/MariaDB with a database and user. The backup module expects a working `mysqldump` command.
-- Redis for the default queue and the recommended cache/session setup.
-- Nginx or another web server pointed at `public/`.
-- Supervisor for a persistent Redis queue worker.
-- Cron/systemd timer for Laravel's scheduler.
-- A public domain with DNS already pointing to the server. HTTPS is strongly recommended and required for a reliable Telegram webhook.
+- Node.js LTS و npm.
+- MySQL 8 یا MariaDB.
+- Redis.
+- Nginx.
+- Supervisor برای اجرای Queue Worker.
+- Cron یا systemd timer برای اجرای Scheduler.
+- دامنه‌ای که به IP سرور اشاره کند.
+- گواهی SSL برای سایت و Webhook تلگرام.
 
-### External services
+### سرویس‌های خارجی
 
-- A reachable Marzban, Sanaei/X-UI, or PasarGuard panel with API credentials.
-- A Telegram bot token from BotFather if Telegram features are enabled.
-- Optional SMTP/provider credentials if real email verification and password-reset email delivery is required.
-- Optional public subscription/tunnel domains for X-UI output modes.
+- یک پنل قابل دسترس Marzban، Sanaei/X-UI یا PasarGuard.
+- توکن ربات تلگرام در صورت فعال بودن ربات.
+- SMTP واقعی در صورت نیاز به ارسال ایمیل تأیید و بازیابی رمز.
+- دامنه Subscription یا Tunnel برای حالت‌های خاص X-UI.
 
-## Deployment options
+## روش‌های نصب
 
-### 1. Automated Ubuntu deployment
+### ۱. نصب خودکار در Ubuntu
 
-The bundled `install.sh` installs and configures multiple independent Mehrgan instances. Each instance gets its own project directory, database, Nginx site, Supervisor worker group, and cron file.
+اسکریپت `install.sh` چند نمونه مستقل از مهرگان نصب می‌کند. هر نمونه پوشه، دیتابیس، سایت Nginx، Worker و Cron جداگانه دارد.
 
-#### Step 1: Prepare DNS and SSH
+#### مرحله ۱: تنظیم DNS و ورود به سرور
 
-Create an A/AAAA record such as `vpn.example.com` pointing to the server, then connect over SSH with a sudo-capable account. Make sure ports 22, 80, and 443 are reachable.
+یک رکورد A یا AAAA بسازید، برای مثال:
 
-#### Step 2: Download the repository
+```text
+vpn.example.com -> IP_SERVER
+```
 
-Cloning the repository is safer than downloading only `install.sh`, because reinstall and uninstall paths use the other scripts too:
+سپس با SSH و کاربر دارای دسترسی `sudo` وارد سرور شوید. پورت‌های ۲۲، ۸۰ و ۴۴۳ باید باز باشند.
+
+#### مرحله ۲: دریافت پروژه و اجرای نصب
+
+بهتر است کل پروژه را Clone کنید؛ چون اسکریپت نصب در بعضی شرایط به `uninstall.sh` و فایل‌های دیگر نیاز دارد:
 
 ```bash
 cd /tmp
@@ -267,57 +316,53 @@ cd Mehrgan
 sudo bash install.sh
 ```
 
-The installer currently clones the repository's `main` branch for each new instance.
+اسکریپت نصب در حال حاضر برای هر نمونه، کد را از Branch اصلی `main` دریافت می‌کند.
 
-#### Step 3: Answer the installer prompts
+#### مرحله ۳: پاسخ به سوال‌های نصب
 
-The installer asks whether server prerequisites are already installed. If you answer `n`, it installs or enables:
+اگر اعلام کنید پیش‌نیازها نصب نیستند، اسکریپت موارد زیر را نصب و فعال می‌کند:
 
-- Nginx, MySQL, Redis, Supervisor, Git, Certbot, UFW.
-- PHP 8.3 and required extensions.
-- Node.js LTS, npm, and build tools.
+- Nginx، MySQL، Redis، Supervisor و Certbot.
+- PHP 8.3 و افزونه‌های لازم.
+- Node.js LTS و npm.
 - Composer.
 
-Then, for each instance, enter:
+برای هر نمونه باید موارد زیر را وارد کنید:
 
-1. A folder/instance name, for example `mehrgan-1`.
-2. The public domain, for example `vpn.example.com`.
-3. A database name, database username, and non-empty database password.
-4. The initial admin email and password.
-5. An email for the optional Certbot certificate.
-6. Whether SSL should be enabled.
+1. نام پوشه، مانند `mehrgan-1`.
+2. دامنه، مانند `vpn.example.com`.
+3. نام دیتابیس، نام کاربر دیتابیس و رمز دیتابیس.
+4. ایمیل و رمز اولیه مدیر.
+5. ایمیل دریافت گواهی SSL.
+6. فعال یا غیرفعال بودن SSL.
 
-The installer then clones the project, creates the database, writes `.env`, installs Composer/npm dependencies, generates `APP_KEY`, migrates/seeds the database, creates the storage link, builds assets, creates Nginx and Supervisor configuration, registers the scheduler, and optionally requests SSL.
+اسکریپت سپس کد را Clone می‌کند، دیتابیس را می‌سازد، فایل `.env` را تنظیم می‌کند، وابستگی‌ها را نصب می‌کند، مایگریشن و Seed را اجرا می‌کند، Storage Link می‌سازد، Assetها را Build می‌کند و تنظیمات Nginx، Supervisor و Cron را ایجاد می‌کند.
 
-> **Installer warning:** the prerequisite branch is intended for a clean Ubuntu server and removes existing PHP packages before installing PHP 8.3. Do not run it blindly on a server hosting other PHP applications. Back up the server first or answer `y` only when the required stack is already installed.
+> **هشدار:** شاخه نصب پیش‌نیازها برای سرور Ubuntu تمیز طراحی شده است و قبل از نصب PHP 8.3 ممکن است PHPهای قبلی را حذف کند. اگر روی سرور برنامه دیگری دارید، قبل از اجرا بکاپ بگیرید یا گزینه نصب پیش‌نیازها را با دقت انتخاب کنید.
 
-#### Step 4: Verify the instance
+#### مرحله ۴: بررسی نصب
 
-The installer prints the instance URL and admin URL. Check them in a browser:
+پس از پایان نصب، سایت و پنل مدیریت را باز کنید:
 
 ```text
 https://vpn.example.com/
 https://vpn.example.com/admin
 ```
 
-Check the worker and web services:
+و وضعیت سرویس‌ها را ببینید:
 
 ```bash
 sudo supervisorctl status
 sudo systemctl status nginx php8.3-fpm mysql redis-server supervisor
 ```
 
-#### Step 5: Complete the application setup
+سپس بخش [تنظیمات اولیه بعد از نصب](#تنظیمات-اولیه-بعد-از-نصب) را انجام دهید.
 
-Continue with [First-time configuration](#first-time-configuration). Telegram cannot be configured completely by the shell installer because the bot token and admin chat IDs are stored in the Filament settings database.
+### ۲. نصب دستی روی سرور
 
-### 2. Manual production deployment
+این روش برای سروری مناسب است که از قبل Web Stack دارد یا می‌خواهید تمام مراحل را خودتان کنترل کنید. در دستورات زیر `/var/www/mehrgan` و `vpn.example.com` را با مقادیر خودتان جایگزین کنید.
 
-Use this path when the server already has a web stack or when you need full control over versions and service isolation. Replace `/var/www/mehrgan` and `vpn.example.com` with your values.
-
-#### Step 1: Install system packages
-
-On Ubuntu 22.04, an example baseline is:
+#### مرحله ۱: نصب پکیج‌ها
 
 ```bash
 sudo apt update
@@ -331,7 +376,7 @@ sudo apt install -y php8.3 php8.3-cli php8.3-fpm php8.3-mysql php8.3-mbstring \
   php8.3-dom php8.3-redis
 ```
 
-Install Node.js LTS and Composer if they are not already present:
+نصب Node.js LTS و Composer در صورت نصب نبودن:
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
@@ -342,15 +387,15 @@ sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
 rm composer-setup.php
 ```
 
-Enable services:
+فعال‌سازی سرویس‌ها:
 
 ```bash
 sudo systemctl enable --now nginx php8.3-fpm mysql redis-server supervisor
 ```
 
-#### Step 2: Create the production database
+#### مرحله ۲: ساخت دیتابیس
 
-Use a strong password and do not use the MySQL root account from the application:
+با یک کاربر جداگانه برای برنامه، دیتابیس بسازید:
 
 ```bash
 sudo mysql
@@ -358,13 +403,13 @@ sudo mysql
 
 ```sql
 CREATE DATABASE mehrgan CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'mehrgan_app'@'localhost' IDENTIFIED BY 'replace-with-a-long-password';
+CREATE USER 'mehrgan_app'@'localhost' IDENTIFIED BY 'یک-رمز-طولانی-و-قوی';
 GRANT ALL PRIVILEGES ON mehrgan.* TO 'mehrgan_app'@'localhost';
 FLUSH PRIVILEGES;
 EXIT;
 ```
 
-#### Step 3: Clone the application
+#### مرحله ۳: دریافت پروژه
 
 ```bash
 sudo mkdir -p /var/www
@@ -373,14 +418,14 @@ sudo chown -R www-data:www-data /var/www/mehrgan
 cd /var/www/mehrgan
 ```
 
-#### Step 4: Create and edit `.env`
+#### مرحله ۴: ساخت فایل `.env`
 
 ```bash
 sudo -u www-data cp .env.example .env
 sudo -u www-data nano .env
 ```
 
-At minimum, set production values similar to:
+مقادیر اصلی را مانند نمونه زیر تنظیم کنید:
 
 ```dotenv
 APP_NAME=Mehrgan
@@ -389,14 +434,14 @@ APP_DEBUG=false
 APP_URL=https://vpn.example.com
 
 ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=change-this-before-installation
+ADMIN_PASSWORD=قبل-از-نصب-تغییر-دهید
 
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=mehrgan
 DB_USERNAME=mehrgan_app
-DB_PASSWORD=replace-with-a-long-password
+DB_PASSWORD=رمز-دیتابیس
 
 SESSION_DRIVER=database
 CACHE_STORE=database
@@ -409,9 +454,9 @@ REDIS_PORT=6379
 REDIS_PASSWORD=null
 ```
 
-Keep `APP_DEBUG=false` in production. The `ADMIN_*` values are read by the first database seed only; re-running the seed does not overwrite an existing admin account.
+در محیط واقعی حتماً `APP_DEBUG=false` باشد. مقادیر `ADMIN_EMAIL` و `ADMIN_PASSWORD` فقط در Seed اولیه استفاده می‌شوند و اجرای دوباره Seed رمز مدیر موجود را تغییر نمی‌دهد.
 
-#### Step 5: Install PHP and JavaScript dependencies
+#### مرحله ۵: نصب وابستگی‌ها
 
 ```bash
 cd /var/www/mehrgan
@@ -420,24 +465,30 @@ sudo -u www-data HOME=/var/www npm ci
 sudo -u www-data php artisan key:generate --force
 ```
 
-If `package-lock.json` has intentionally changed in your deployment branch, use `npm install` instead of `npm ci` and review the resulting lockfile.
+اگر `package-lock.json` در Branch شما تغییر کرده است، به‌جای `npm ci` از `npm install` استفاده کنید و تغییرات Lockfile را بررسی کنید.
 
-#### Step 6: Migrate, seed, link storage, and build assets
+#### مرحله ۶: مایگریشن، Storage و Build
 
 ```bash
 sudo -u www-data php artisan migrate --seed --force
 sudo -u www-data php artisan storage:link
-sudo -u www-data npm run build
+sudo -u www-data HOME=/var/www npm run build
 
 sudo chown -R www-data:www-data storage bootstrap/cache
 sudo chmod -R ug+rwX storage bootstrap/cache
 ```
 
-The `public/build` directory is ignored by Git, so `npm run build` must be executed on every fresh production checkout and after frontend changes.
+پوشه `public/build` در Git نگهداری نمی‌شود؛ بنابراین بعد از هر نصب یا تغییر Frontend باید `npm run build` اجرا شود.
 
-#### Step 7: Configure Nginx
+#### مرحله ۷: تنظیم Nginx
 
-Create `/etc/nginx/sites-available/mehrgan`:
+فایل زیر را بسازید:
+
+```text
+/etc/nginx/sites-available/mehrgan
+```
+
+محتوای پیشنهادی:
 
 ```nginx
 server {
@@ -465,7 +516,7 @@ server {
 }
 ```
 
-Enable and validate it:
+فعال‌سازی و بررسی:
 
 ```bash
 sudo ln -s /etc/nginx/sites-available/mehrgan /etc/nginx/sites-enabled/mehrgan
@@ -473,9 +524,13 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-#### Step 8: Configure a queue worker
+#### مرحله ۸: تنظیم Queue Worker با Supervisor
 
-Create `/etc/supervisor/conf.d/mehrgan-worker.conf`:
+فایل زیر را بسازید:
+
+```text
+/etc/supervisor/conf.d/mehrgan-worker.conf
+```
 
 ```ini
 [program:mehrgan-worker]
@@ -493,7 +548,7 @@ stdout_logfile=/var/log/supervisor/mehrgan-worker.log
 stopwaitsecs=3600
 ```
 
-Load it:
+سپس:
 
 ```bash
 sudo supervisorctl reread
@@ -502,25 +557,25 @@ sudo supervisorctl start "mehrgan-worker:*"
 sudo supervisorctl status
 ```
 
-The worker is required for Telegram broadcasts and reseller account-creation jobs, and is recommended for all production installs because the application defaults to Redis queues.
+Worker برای پیام همگانی تلگرام و ساخت اکانت‌های نمایندگی لازم است و برای نصب Production توصیه می‌شود.
 
-#### Step 9: Register Laravel's scheduler
+#### مرحله ۹: فعال‌سازی Scheduler
 
-Laravel's scheduler runs the daily backup command and any future scheduled tasks. Add `/etc/cron.d/mehrgan`:
+فایل `/etc/cron.d/mehrgan` را بسازید:
 
 ```cron
 * * * * * www-data cd /var/www/mehrgan && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-#### Step 10: Enable HTTPS
+#### مرحله ۱۰: فعال‌سازی SSL
 
-After DNS and HTTP are working:
+بعد از تنظیم DNS و اطمینان از کار کردن HTTP:
 
 ```bash
 sudo certbot --nginx -d vpn.example.com -m admin@example.com --agree-tos --redirect
 ```
 
-Update `APP_URL` to the HTTPS URL if necessary, then clear and rebuild cached application state:
+بعد از SSL، مقدار `APP_URL` را بررسی کنید و Cache را بازسازی کنید:
 
 ```bash
 sudo -u www-data php artisan optimize:clear
@@ -528,7 +583,7 @@ sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan view:cache
 ```
 
-#### Step 11: Verify the deployment
+#### مرحله ۱۱: بررسی نهایی
 
 ```bash
 curl -I https://vpn.example.com
@@ -536,198 +591,188 @@ sudo supervisorctl status
 sudo -u www-data php artisan about
 ```
 
-Then log in at `https://vpn.example.com/admin` and follow the configuration checklist below.
+## تنظیمات اولیه بعد از نصب
 
-## First-time configuration
+### ۱. ورود به پنل مدیر
 
-Complete these steps in order after the first successful deployment.
+به مسیر `/admin` بروید و با ایمیل و رمزی که هنگام نصب تعیین کرده‌اید وارد شوید. اگر رمز پیش‌فرض استفاده شده است، بلافاصله آن را تغییر دهید.
 
-### 1. Sign in to Filament
+### ۲. تنظیم سایت و پرداخت
 
-Open `/admin` and sign in with the admin credentials supplied through `ADMIN_EMAIL` and `ADMIN_PASSWORD` during the first seed. Change the password immediately if a temporary/default password was used.
+در بخش تنظیمات سایت:
 
-### 2. Set the public site and payment settings
+- قالب فعال را انتخاب کنید.
+- نام برند، متن Hero، قیمت‌گذاری، FAQ و Footer را تنظیم کنید.
+- کارت‌های بانکی و توضیحات کارت‌به‌کارت را وارد کنید.
+- لینک‌های شبکه‌های اجتماعی را تنظیم کنید.
+- لینک ورود سایت برای ربات را وارد کنید.
 
-Open the site/settings page and configure:
+### ۳. ساخت لوکیشن و سرور
 
-- The active theme and its brand, hero, pricing, FAQ, and footer content.
-- One or more payment cards and the common card-payment instructions.
-- Any social links displayed by the selected theme.
-- The public site-login URL used by the Telegram bot.
+در **MultiServer → Locations** کشورها و لوکیشن‌ها را بسازید.
 
-### 3. Configure MultiServer
+سپس در **MultiServer → Servers** برای هر سرور این موارد را وارد کنید:
 
-Open **MultiServer → Locations** and create each country/location with a name, flag, unique slug, and active status.
+- لوکیشن.
+- نوع پنل: X-UI/Sanaei، Marzban یا PasarGuard.
+- دامنه یا IP، پورت و Path.
+- HTTPS.
+- نام کاربری و رمز پنل.
+- Inbound ID برای X-UI.
+- Node Hostname برای Marzban/PasarGuard در صورت نیاز.
+- ظرفیت و وضعیت فعال بودن.
+- نوع لینک خروجی: `single`، `subscription` یا `tunnel`.
 
-Open **MultiServer → Servers** and add each panel:
+سرور را فقط بعد از تست اتصال فعال کنید.
 
-- Select the location.
-- Select `X-UI / Sanaei`, `Marzban`, or `PasarGuard`.
-- Enter the panel address, port, path, HTTPS setting, username, and password.
-- For X-UI, set the inbound ID or use the inbound selector to load it from the panel.
-- For Marzban/PasarGuard, optionally set the node hostname.
-- Set capacity and active status.
-- Choose the output link type:
-  - `single`: a direct VLESS configuration.
-  - `subscription`: a subscription URL using the configured domain/path/port.
-  - `tunnel`: a VLESS link addressed to the configured tunnel endpoint.
+### ۴. ساخت پلن
 
-Do not mark a server active until its credentials and inbound/subscription values have been tested.
+در بخش پلن‌های سرویس، حداقل یک پلن فعال بسازید:
 
-### 4. Create service plans
+- نام و قیمت.
+- حجم به GB.
+- مدت به روز.
+- امکانات، هر مورد در یک خط.
+- نوع سرور قابل استفاده.
+- وضعیت فعال و محبوب.
 
-Open **Service Plans** and create at least one active plan:
+### ۵. راه‌اندازی تلگرام
 
-- Name and price in toman.
-- Traffic volume in GB.
-- Duration in days.
-- Features, one per line.
-- Supported server type (`all`, `xui`, or `marzban` in the current plan form).
-- Popular and active flags.
+توکن و Chat ID را طبق بخش [راه‌اندازی ربات تلگرام](#راهاندازی-ربات-تلگرام) تنظیم کنید و با `/start` ربات را تست کنید.
 
-The public landing page and Telegram bot show only active plans.
+### ۶. امکانات اختیاری
 
-### 5. Configure Telegram
+- اکانت تست.
+- سیستم دعوت.
+- FAQ و آموزش اتصال.
+- اجبار عضویت در کانال.
+- کدهای تخفیف.
+- بکاپ تلگرام.
+- پلن‌ها و محصولات نمایندگی.
 
-Follow [Configure Telegram](#configure-telegram), set the webhook, and send `/start` to the bot. Confirm that a new user is created and that the menu can load plans.
+### ۷. تست کامل
 
-### 6. Configure optional features
+قبل از فروش واقعی این موارد را تست کنید:
 
-- **Trial:** set `trial_enabled`, trial server, MB limit, hours, and per-user limit under trial settings.
-- **Referrals:** set enablement, fixed/percentage rewards, welcome gift, limits, and notifications.
-- **FAQ/tutorials:** add FAQ records and edit tutorial text in Telegram settings.
-- **Forced channel membership:** enable it and enter a public username or private channel chat ID. The bot must be able to query membership.
-- **Discounts:** create an active discount code and test it with a low-risk plan.
-- **Backups:** configure Telegram admin chat IDs and run a manual backup before going live.
-- **Resellers:** create reseller plans, VPN servers/products, and configure reseller deposit cards if the module is part of the business flow.
+1. ثبت‌نام و ورود سایت.
+2. `/start` و نمایش پلن‌ها در ربات.
+3. خرید یک پلن کم‌حجم روی هر نوع پنل.
+4. پرداخت کارت‌به‌کارت و تأیید رسید.
+5. شارژ کیف پول و خرید با کیف پول.
+6. ارسال لینک، کپی لینک و QR Code در تلگرام.
+7. تمدید و ریست مصرف.
+8. کد تخفیف و پاداش دعوت.
+9. ساخت و پاسخ تیکت.
+10. Queue، Scheduler و بکاپ.
 
-### 7. Run an end-to-end test
+## اتصال پنل VPN
 
-Before selling real subscriptions, test:
+### روش پیشنهادی MultiServer
 
-1. Website registration and login.
-2. Telegram `/start` and the plan menu.
-3. A low-volume plan on every active panel type.
-4. Card receipt upload and admin approval.
-5. Wallet top-up approval followed by wallet purchase.
-6. Telegram service delivery, copy link, and QR code.
-7. Renewal and traffic reset.
-8. Referral reward and discount-code conditions.
-9. Ticket creation, admin reply, and Telegram notification.
-10. Queue worker, scheduler, and backup restore on a non-production database.
+1. یک لوکیشن بسازید.
+2. یک سرور فعال در آن لوکیشن بسازید.
+3. نوع پنل را انتخاب کنید.
+4. اطلاعات ورود را وارد کنید.
+5. در X-UI، Inbound فعال و صحیح را انتخاب کنید.
+6. حالت لینک خروجی را تنظیم کنید.
+7. یک پلن سازگار بسازید.
+8. یک خرید آزمایشی انجام دهید.
+9. ظاهر شدن کاربر در پنل VPN و صحت لینک را بررسی کنید.
 
-## Configure a VPN panel
+### حالت قدیمی تک‌سرور
 
-### MultiServer (recommended)
+برای سازگاری با نسخه‌های قدیمی، کلیدهای `xui_*`، `marzban_*` و `pasarguard_*` در جدول `settings` نیز پشتیبانی می‌شوند. برای نصب جدید MultiServer بهتر است.
 
-1. Create a location.
-2. Create an active server under that location.
-3. Choose the panel type.
-4. Add credentials and verify the address from the Mehrgan host, not only from your laptop.
-5. For X-UI/Sanaei, choose an inbound whose protocol and stream settings are valid for the intended client.
-6. Configure the generated-link mode and any subscription/tunnel endpoint.
-7. Create a plan compatible with the server type.
-8. Place a test order and verify the account appears on the remote panel.
+### بررسی ارتباط سرور
 
-### Legacy single-panel mode
+از خود سرور مهرگان مطمئن شوید که:
 
-Older installations can still use values stored in the generic `settings` table for `xui_*`, `marzban_*`, and `pasarguard_*` keys. This mode is kept for backward compatibility. New deployments should use MultiServer so locations, capacity, and per-server credentials are explicit.
+- دامنه پنل Resolve می‌شود.
+- پورت پنل باز است.
+- کاربر API می‌تواند Login کند.
+- Inbound فعال است.
+- دامنه Subscription یا Tunnel به مقصد درست اشاره می‌کند.
+- واحد حجم و زمان با API پنل هماهنگ است.
 
-### Panel connectivity checklist
+## راه‌اندازی ربات تلگرام
 
-From the Mehrgan server, verify:
+### ۱. ساخت Bot
 
-- The panel hostname resolves.
-- The panel port is reachable through the firewall.
-- The API user can log in.
-- The selected inbound exists and is enabled.
-- The subscription/tunnel domain resolves to the intended endpoint.
-- The panel accepts the traffic and expiry units used by its API.
+در BotFather یک Bot بسازید و Token آن را محرمانه نگه دارید.
 
-## Configure Telegram
+### ۲. ذخیره Token و Chat ID
 
-### 1. Create the bot
-
-Use BotFather to create a bot and keep the token private. Do not commit it to Git or place it in a public issue.
-
-### 2. Save the token and admin chat IDs
-
-In Filament, open the site/Telegram settings and save:
+در پنل مدیریت، تنظیمات تلگرام را باز کنید و این موارد را وارد کنید:
 
 - `telegram_bot_token`.
-- One or more numeric `telegram_admin_chat_id` values.
-- Optional `site_login_url`.
-- Optional `force_join_enabled` and `telegram_required_channel_id`.
-- Visibility of the reseller and trial buttons.
+- یک یا چند `telegram_admin_chat_id` عددی.
+- `site_login_url` در صورت نیاز.
+- تنظیمات اجباری عضویت در کانال.
+- نمایش یا عدم نمایش دکمه تست و نمایندگی.
 
-The main bot controller reads the token from the database settings. `TELEGRAM_BOT_TOKEN` in the environment is useful as the package fallback, but saving the token in Filament is the supported application configuration path.
+توکن اصلی ربات از تنظیمات دیتابیس خوانده می‌شود. مقدار `TELEGRAM_BOT_TOKEN` در `.env` فقط Fallback پکیج تلگرام است؛ روش پیشنهادی، ذخیره Token در پنل است.
 
-If Telegram must be reached through a proxy, set `TELEGRAM_PROXY` in `.env` and clear/reload the application configuration. When forced channel membership is enabled, add the bot as an administrator of the channel so Telegram can answer membership checks.
+اگر سرور برای اتصال به تلگرام Proxy دارد، در `.env` مقدار `TELEGRAM_PROXY` را تنظیم کنید.
 
-### 3. Set the webhook
+اگر اجبار عضویت فعال است، Bot را در کانال به‌عنوان Administrator اضافه کنید تا بتواند عضویت کاربر را بررسی کند.
 
-Run this from the application directory after `APP_URL` is a public HTTPS URL and the database token setting exists:
+### ۳. ثبت Webhook
+
+بعد از تنظیم `APP_URL` روی دامنه عمومی HTTPS و ذخیره Token در پنل، اجرا کنید:
 
 ```bash
 sudo -u www-data php artisan telegram:set-webhook
 ```
 
-The command registers:
+Webhook در این مسیر ثبت می‌شود:
 
 ```text
 https://your-domain.example/webhooks/telegram
 ```
 
-The webhook endpoint is also available as `POST /webhooks/telegram` and returns HTTP 200 after the update is handled/logged.
+### ۴. تست ربات
 
-### 4. Verify the bot
+در ربات `/start` را بفرستید و این موارد را بررسی کنید:
 
-Send `/start` and test:
+- نمایش پلن‌ها.
+- وارد کردن اشتراک.
+- اکانت تست.
+- ارسال رسید.
+- ساخت تیکت.
+- دریافت لینک سرویس.
 
-- Plan listing.
-- Import flow.
-- Trial flow, if enabled.
-- A card receipt photo.
-- A support ticket.
-- A service link and QR code after admin approval.
+برای خطاها فایل زیر را بررسی کنید:
 
-Check `storage/logs/laravel.log` and the Telegram API response if a message is not delivered.
+```text
+storage/logs/laravel.log
+```
 
-## Payments and orders
+## پرداخت و سفارش
 
-### Website purchase flow
+### خرید از سایت
 
-1. The visitor chooses an active plan.
-2. The application creates a pending order.
-3. The customer selects a server when MultiServer selection is enabled.
-4. The customer can apply a discount code.
-5. The customer pays by wallet or card receipt.
-6. Wallet payments provision immediately inside a database transaction.
-7. Card payments wait for an admin approval action in Filament.
-8. Approval provisions the remote account, saves the link/expiry, records a transaction, and sends notifications.
-9. Rejection records the reason and sends a Telegram message when the user has a Telegram chat ID.
+1. کاربر پلن را انتخاب می‌کند.
+2. سفارش در وضعیت Pending ساخته می‌شود.
+3. در حالت چندسروری، سرور انتخاب می‌شود.
+4. کد تخفیف در صورت وجود اعمال می‌شود.
+5. پرداخت با کیف پول یا کارت انجام می‌شود.
+6. پرداخت کیف پول به‌صورت آنی پردازش می‌شود.
+7. پرداخت کارت‌به‌کارت منتظر تأیید مدیر می‌ماند.
+8. پس از تأیید، کاربر در پنل VPN ساخته و لینک ذخیره می‌شود.
+9. کاربر از سایت و تلگرام اعلان دریافت می‌کند.
 
-### Card receipt requirements
+### محدودیت رسید
 
-- Website receipt uploads accept image files up to 2 MB.
-- Ticket attachments are separate and accept JPG/JPEG/PNG/PDF/ZIP up to 5 MB.
-- Configure `client_max_body_size` in Nginx to at least 10 MB as done by the installer.
-- Run `php artisan storage:link` so public uploads can be served.
+- رسید کارت در سایت: تصویر حداکثر ۲ مگابایت.
+- پیوست تیکت: JPG، JPEG، PNG، PDF یا ZIP حداکثر ۵ مگابایت.
+- در Nginx مقدار `client_max_body_size` حداقل ۱۰ مگابایت باشد.
+- دستور `php artisan storage:link` باید اجرا شده باشد.
 
-### Wallet flow
+## آپدیت و مدیریت سرور
 
-1. Customer opens wallet top-up.
-2. A pending wallet order is created.
-3. The customer submits a card receipt.
-4. Admin approves it from Orders.
-5. The amount is credited to the customer's wallet and a deposit transaction is recorded.
-6. The balance can be used for a plan purchase or renewal.
+### روش دستی پیشنهادی
 
-## Updates and server operations
-
-### Recommended manual update sequence
-
-Always back up the database and `.env` before updating:
+قبل از آپدیت از دیتابیس و `.env` بکاپ بگیرید:
 
 ```bash
 cd /var/www/mehrgan
@@ -749,7 +794,7 @@ sudo supervisorctl restart "mehrgan-worker:*"
 sudo -u www-data php artisan up
 ```
 
-Use the branch and worker name that belong to your instance. If an update fails while the application is in maintenance mode, recover it with:
+اگر آپدیت در حالت Maintenance متوقف شد:
 
 ```bash
 cd /var/www/mehrgan
@@ -758,26 +803,26 @@ sudo -u www-data php artisan up
 sudo supervisorctl status
 ```
 
-### Bundled per-instance update script
+### اسکریپت `update.sh`
 
-The repository includes an interactive-free update helper for an installed instance:
+برای یک نمونه نصب‌شده:
 
 ```bash
 cd /var/www/mehrgan-1
 sudo bash update.sh
 ```
 
-It backs up `.env`, enables maintenance mode, fetches the current branch, installs Composer/npm dependencies, builds assets, migrates the database, restarts that instance's Supervisor workers, clears/warms caches, and disables maintenance mode.
-
-The script can also receive a path:
+یا با مسیر مشخص:
 
 ```bash
 sudo bash update.sh --path=/var/www/mehrgan-1
 ```
 
-It may stash or hard-reset local Git changes. Do not use it to deploy uncommitted production edits. Also note that the current script attempts `php artisan route:cache` while the project contains closure routes; if that command fails, use the manual recovery commands above and omit route caching.
+این اسکریپت `.env` را بکاپ می‌گیرد، سایت را Maintenance می‌کند، کد را دریافت می‌کند، Composer و npm را اجرا می‌کند، مایگریشن را انجام می‌دهد، Worker را ری‌استارت می‌کند و Cacheها را می‌سازد.
 
-### Instance management helper
+> این اسکریپت ممکن است تغییرات محلی Git را Stash یا Hard Reset کند. همچنین در نسخه فعلی `route:cache` را اجرا می‌کند، در حالی که پروژه چند Route Closure دارد. اگر این مرحله خطا داد، ابتدا `php artisan up` را اجرا کنید و Route Cache را انجام ندهید.
+
+### مدیریت نمونه‌ها
 
 ```bash
 bash manage.sh list
@@ -788,68 +833,73 @@ bash manage.sh stop mehrgan-1
 bash manage.sh start mehrgan-1
 ```
 
-### Removing an instance
+### حذف نمونه
 
-`uninstall.sh` is destructive: it stops workers, removes Nginx/Supervisor/cron configuration, deletes the SSL certificate, drops the database and database user, and deletes the project directory.
+حذف نمونه برگشت‌پذیر نیست و موارد زیر را حذف می‌کند:
+
+- Worker.
+- تنظیمات Nginx و Cron.
+- گواهی SSL.
+- دیتابیس و کاربر دیتابیس.
+- پوشه پروژه.
 
 ```bash
 sudo bash uninstall.sh --slug=mehrgan-1
 ```
 
-Create and verify a backup before using it. `--all` can remove every detected Mehrgan instance.
+قبل از حذف حتماً بکاپ سالم تهیه کنید. گزینه `--all` تمام نمونه‌های شناسایی‌شده را حذف می‌کند.
 
-## Backups and restore
+## بکاپ و بازیابی
 
-### Filament backup page
+### از پنل مدیریت
 
-Open **System → Backup Management** and use:
+در بخش مدیریت بکاپ می‌توانید:
 
-- **Create backup:** dumps the MySQL database and packages it with public storage files.
-- **Upload backup:** uploads a ZIP into the backup directory.
-- **Restore:** imports the SQL dump and replaces the public storage directory.
-- **Download/delete:** manage existing backup archives.
+- بکاپ جدید بسازید.
+- فایل ZIP بکاپ را آپلود کنید.
+- دیتابیس و فایل‌های عمومی را Restore کنید.
+- بکاپ را دانلود یا حذف کنید.
+- بکاپ را به تلگرام مدیران ارسال کنید.
 
-A restore can overwrite current data and public files. Test the archive and restore process on a staging database first.
+Restore می‌تواند اطلاعات فعلی دیتابیس و پوشه public storage را جایگزین کند؛ ابتدا روی محیط آزمایشی تست کنید.
 
-### Command line and schedule
-
-Run a backup immediately:
+### اجرای دستی بکاپ
 
 ```bash
 sudo -u www-data php artisan backup:daily-telegram
 ```
 
-The command creates a ZIP and attempts to send it to all configured Telegram admin chat IDs. The module registers the same command daily through Laravel's scheduler, so the cron entry from deployment must be active.
+این دستور بکاپ را می‌سازد و در صورت تنظیم Token و Chat ID، آن را به تلگرام مدیران می‌فرستد. Scheduler همین دستور را روزانه اجرا می‌کند.
 
-The backup service requires:
+برای بکاپ، موارد زیر لازم است:
 
-- A working MySQL-compatible `mysqldump` binary.
-- PHP `ZipArchive`.
-- Correct MySQL credentials in the application configuration.
-- Telegram bot token and admin chat IDs if remote delivery is desired.
+- دستور `mysqldump`.
+- افزونه PHP `ZipArchive`.
+- اطلاعات صحیح دیتابیس.
+- Token و Chat ID تلگرام برای ارسال از راه دور.
 
-Keep backup archives private; they contain database data and potentially sensitive uploaded files.
+فایل بکاپ شامل اطلاعات حساس است و باید خصوصی نگهداری شود.
 
-## Testing and development
+## تست و توسعه
 
-Install development dependencies first:
+نصب وابستگی‌های توسعه:
 
 ```bash
 composer install
 npm ci
 ```
 
-Run the PHP test suite:
+اجرای تست‌ها:
 
 ```bash
 composer test
-# or
+# یا
 php artisan test
-# or
+# یا
 ./vendor/bin/pest
 ```
 
-Run selected tests:
+اجرای تست‌های مهم:
 
 ```bash
 ./vendor/bin/pest --filter=VlessParser
@@ -858,19 +908,19 @@ Run selected tests:
 ./vendor/bin/pest --filter=UserBan
 ```
 
-Build frontend assets:
+ساخت Assetها:
 
 ```bash
 npm run build
 ```
 
-For local development, configure a local database/Redis in `.env`, then use:
+محیط توسعه:
 
 ```bash
 composer run dev
 ```
 
-The development script starts the Laravel server, queue listener, log viewer, and Vite concurrently. Alternatively, run them separately:
+یا اجرای جداگانه:
 
 ```bash
 php artisan serve
@@ -878,27 +928,33 @@ php artisan queue:listen --tries=1
 npm run dev
 ```
 
-The test suite uses an in-memory SQLite database through `phpunit.xml`; production should use MySQL/MariaDB as described above.
+تست‌ها از SQLite درون حافظه استفاده می‌کنند؛ برای Production استفاده از MySQL/MariaDB پیشنهاد می‌شود.
 
-## Routes and APIs
+## مسیرها و APIها
 
-Use `php artisan route:list` on the deployed version for the definitive route list. The main application exposes:
+برای دیدن فهرست نهایی مسیرها اجرا کنید:
 
-| Method | Path | Purpose |
+```bash
+php artisan route:list
+```
+
+مسیرهای اصلی:
+
+| متد | مسیر | کاربرد |
 |---|---|---|
-| `GET` | `/` | Public storefront using the active theme. |
-| `GET` | `/login`, `/register` | Authentication pages. |
-| `GET` | `/dashboard` | Authenticated customer dashboard. |
-| `GET` | `/subscription/import` | Authenticated import form. |
-| `POST` | `/subscription/import` | Web subscription import. |
-| `POST` | `/subscription/import/api` | JSON-style import response; authenticated web session required. |
-| `GET` | `/blog` | Published blog posts. |
-| `GET` | `/blog/{slug}` | Published blog post. |
-| `POST` | `/webhooks/telegram` | Telegram bot webhook. |
-| `POST` | `/webhooks/nowpayments` | NOWPayments status webhook. |
-| `GET/POST` | `/tickets/...` | Authenticated, verified support-ticket pages from the Ticketing module. |
+| `GET` | `/` | صفحه اصلی و فروشگاه |
+| `GET` | `/login` و `/register` | ورود و ثبت‌نام |
+| `GET` | `/dashboard` | داشبورد کاربر |
+| `GET` | `/subscription/import` | فرم وارد کردن اشتراک |
+| `POST` | `/subscription/import` | وارد کردن اشتراک از سایت |
+| `POST` | `/subscription/import/api` | پاسخ JSON برای وارد کردن اشتراک |
+| `GET` | `/blog` | فهرست وبلاگ |
+| `GET` | `/blog/{slug}` | نمایش پست وبلاگ |
+| `POST` | `/webhooks/telegram` | Webhook ربات تلگرام |
+| `POST` | `/webhooks/nowpayments` | Webhook پرداخت NOWPayments |
+| `GET/POST` | `/tickets/...` | تیکت‌های پشتیبانی |
 
-Module APIs are mounted below `/api` by the module route providers. Important examples include:
+APIهای مهم ماژول‌ها:
 
 - `/api/v1/reseller/profile`
 - `/api/v1/reseller/servers`
@@ -907,66 +963,68 @@ Module APIs are mounted below `/api` by the module route providers. Important ex
 - `/api/v1/telegram/plans`
 - `/api/v1/telegram/reseller/apply`
 - `/api/v1/telegram/reseller/status/{user_id}`
-- `/api/v1/test/vpn/create` and `/api/v1/test/vpn/delete/{id}`
+- `/api/v1/test/vpn/create`
+- `/api/v1/test/vpn/delete/{id}`
 
-The reseller account APIs use Sanctum authentication. Review the route middleware before exposing any module API publicly; some Telegram/testing endpoints are integration endpoints rather than a general public customer API.
+API حساب نمایندگی با Sanctum محافظت می‌شود. قبل از عمومی کردن APIهای ماژول‌ها، Middleware هر Route را بررسی کنید؛ بعضی Endpointهای تلگرام و تست برای اتصال داخلی طراحی شده‌اند.
 
-## Environment configuration
+## تنظیمات محیطی
 
-`.env.example` contains the Laravel defaults. The most important deployment values are:
+مهم‌ترین متغیرهای `.env`:
 
-| Variable | Purpose |
+| متغیر | کاربرد |
 |---|---|
-| `APP_ENV` | Use `production` on a live server. |
-| `APP_DEBUG` | Keep `false` in production. |
-| `APP_URL` | Public HTTPS URL; also used to construct Telegram webhook URLs. |
-| `APP_KEY` | Laravel encryption key; generate it once with `php artisan key:generate`. |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | First-seed admin credentials only. |
-| `DB_*` | MySQL/MariaDB connection. |
-| `SESSION_DRIVER` | Default is database; the sessions migration must be present. |
-| `CACHE_STORE` | Default is database; Redis is also available. |
-| `QUEUE_CONNECTION` | Installer example uses Redis; requires a worker. |
-| `REDIS_*` | Redis connection for queues/cache. |
-| `FILESYSTEM_DISK` | Default local disk. Public uploads use the configured public disk and storage link. |
-| `MAIL_*` | Real email delivery for verification/reset messages. The example uses the log mailer. |
-| `TELEGRAM_PROXY` | Optional proxy for Telegram HTTP requests. |
-| `HTTP_PROXY` | Optional proxy used by XUI HTTP requests. |
-| `TELEGRAM_BOT_TOKEN` | Package-level Telegram fallback; the bot's application token should be saved in Filament settings. |
-| `VITE_APP_NAME` | Frontend build-time application name. |
+| `APP_ENV` | در Production مقدار `production` باشد. |
+| `APP_DEBUG` | در Production مقدار `false` باشد. |
+| `APP_URL` | دامنه عمومی HTTPS و مبنای ساخت Webhook تلگرام. |
+| `APP_KEY` | کلید رمزنگاری Laravel؛ با `key:generate` بسازید. |
+| `ADMIN_EMAIL` و `ADMIN_PASSWORD` | اطلاعات مدیر در Seed اولیه. |
+| `DB_*` | اتصال MySQL/MariaDB. |
+| `SESSION_DRIVER` | معمولاً `database`. |
+| `CACHE_STORE` | معمولاً `database` یا Redis. |
+| `QUEUE_CONNECTION` | در نصب پیشنهادی `redis`. |
+| `REDIS_*` | اتصال Redis. |
+| `FILESYSTEM_DISK` | دیسک فایل‌ها؛ Storage Link لازم است. |
+| `MAIL_*` | ارسال واقعی ایمیل. نمونه پروژه از Log استفاده می‌کند. |
+| `TELEGRAM_PROXY` | Proxy اختیاری برای تلگرام. |
+| `HTTP_PROXY` | Proxy اختیاری برای درخواست‌های X-UI. |
+| `TELEGRAM_BOT_TOKEN` | Fallback پکیج تلگرام؛ Token اصلی را در پنل ذخیره کنید. |
+| `VITE_APP_NAME` | نام برنامه هنگام Build فرانت‌اند. |
 
-Panel credentials, payment cards, referral rules, theme content, Telegram settings, trial settings, and most business settings are intentionally stored in the database and configured from Filament rather than from `.env`.
+اطلاعات پنل‌ها، کارت‌های بانکی، تنظیمات Referral، قالب، تلگرام، Trial و بیشتر تنظیمات کسب‌وکار در دیتابیس و از طریق Filament مدیریت می‌شوند.
 
-## Security and known limitations
+## نکات امنیتی و محدودیت‌ها
 
-### Security practices included
+### موارد امنیتی پیاده‌سازی‌شده
 
-- Laravel authentication, CSRF protection, password hashing, signed email verification URLs, and session regeneration.
-- Filament admin access requires `is_admin` and a non-banned account.
-- Website and Telegram access are both blocked for banned users.
-- Eloquent and request validation are used for database/user input.
-- Subscription import limits input length and blocks common private/local SSRF targets.
-- Telegram Markdown/HTML output has escaping and plain-text fallbacks in important delivery paths.
-- Queue workers, database transactions, row locks, and duplicate checks protect wallet and sequential-name operations.
+- احراز هویت Laravel، CSRF، Hash رمز عبور و Session Regeneration.
+- محدود بودن پنل Filament به کاربران ادمین و غیرمسدود.
+- مسدود شدن کاربر Ban‌شده در سایت و ربات.
+- استفاده از Eloquent و Validation برای ورودی‌ها.
+- محدودیت طول و بررسی SSRF در وارد کردن اشتراک.
+- Escape کردن پیام‌های مهم تلگرام و Fallback به متن ساده.
+- استفاده از Transaction و Lock برای کیف پول و نام‌گذاری ترتیبی.
+- جلوگیری از وارد کردن UUID پرداخت‌شده تکراری.
 
-### Important production limitations
+### محدودیت‌های مهم
 
-- **SSL verification:** panel HTTP services and the subscription importer currently disable TLS certificate verification for compatibility. Prefer trusted panel certificates and restrict panel access at the network layer.
-- **Importer rate limiting:** the import endpoints are authenticated but are not currently protected by a dedicated per-user rate limiter. Add throttling before exposing the feature to an untrusted/high-volume audience.
-- **VLESS-only import parsing:** non-VLESS entries in a subscription are ignored; the first valid VLESS entry supplies the imported UUID.
-- **Imported usage:** imported metadata stores the usage observed during import. The dashboard does not continuously poll the remote panel for live usage.
-- **Imported renewals:** an import with no matching active plan may have a null `plan_id`; create an appropriate active plan before relying on the normal renewal flow.
-- **NOWPayments/crypto:** the NOWPayments webhook currently updates order status/payment ID; the crypto website flow is a placeholder. Verify and complete provisioning, signature validation, and reconciliation before treating either as a production payment gateway.
-- **Email:** `.env.example` uses the log mailer. Configure a real mail transport if email verification or password reset is required.
-- **Backups:** the backup module executes `mysqldump`/`mysql` commands and restores database/public files. Restrict admin access and test restore archives securely.
-- **Route cache:** the project currently defines several closure routes, so `route:cache` may fail. Do not leave the application in maintenance mode if a bundled update stops at that step.
-- **Native clients:** Android/iOS/Windows applications are not part of this repository; only tutorials and VPN links are delivered.
-- **Remote panel consistency:** editing a stored order link in Filament changes Mehrgan only. Use the panel API or the panel itself to change the remote account.
+- **بررسی SSL پنل‌ها:** بعضی سرویس‌های اتصال پنل و Importer برای سازگاری، بررسی Certificate را خاموش کرده‌اند. بهتر است پنل‌ها را با Certificate معتبر و Firewall محدود کنید.
+- **Rate Limit Importer:** مسیرهای Import احراز هویت دارند، اما Rate Limit اختصاصی ندارند. قبل از استفاده عمومی، Throttle اضافه کنید.
+- **فقط VLESS:** در محتوای Subscription، لینک‌های غیر VLESS نادیده گرفته می‌شوند و UUID اولین لینک VLESS معتبر استفاده می‌شود.
+- **مصرف Import‌شده:** مصرف هنگام Import ذخیره می‌شود، اما داشبورد به‌صورت دائمی مصرف لحظه‌ای پنل را Poll نمی‌کند.
+- **تمدید Import:** اگر برای Import هیچ پلن فعالی پیدا نشود، ممکن است `plan_id` خالی باشد و تمدید عادی کار نکند. قبل از تمدید، یک پلن فعال مناسب ایجاد کنید.
+- **NOWPayments و Crypto:** وب‌هوک NOWPayments در وضعیت فعلی وضعیت سفارش و Payment ID را ثبت می‌کند؛ گزینه Crypto نیز Placeholder است. قبل از استفاده تجاری، Signature Validation، Provisioning و Reconciliation را تکمیل و تست کنید.
+- **ایمیل:** `.env.example` از Mailer نوع Log استفاده می‌کند. برای تأیید ایمیل و بازیابی رمز، SMTP واقعی تنظیم کنید.
+- **بکاپ:** ماژول بکاپ از `mysqldump` و `mysql` استفاده می‌کند و دیتابیس و فایل‌های عمومی را Restore می‌کند. دسترسی پنل مدیر را محدود کنید.
+- **Route Cache:** به‌دلیل وجود Closure در بعضی Routeها، `route:cache` ممکن است خطا بدهد. در این حالت سایت را از Maintenance خارج کنید و Route Cache را اجرا نکنید.
+- **اپلیکیشن موبایل:** کلاینت native در این پروژه وجود ندارد؛ فقط لینک VPN و آموزش اتصال تحویل داده می‌شود.
+- **هماهنگی پنل:** ویرایش لینک ذخیره‌شده در Filament، حساب واقعی پنل VPN را تغییر نمی‌دهد.
 
-## Support and contribution
+## پشتیبانی
 
-- Telegram support group: [Mehrgan Official Support](https://t.me/Mehrgan_OfficialSupport)
-- Video/tutorial channel: [Iran Eclips on YouTube](https://www.youtube.com/@iraneclips8168/videos)
+- گروه پشتیبانی تلگرام: [Mehrgan Official Support](https://t.me/Mehrgan_OfficialSupport)
+- کانال آموزش و ویدیو: [Iran Eclips در YouTube](https://www.youtube.com/@iraneclips8168/videos)
 
-For a bug report, include the Laravel/PHP versions, the relevant module, a sanitized log excerpt, and reproducible steps. Never include `.env`, bot tokens, panel passwords, private subscription URLs, or raw customer UUIDs in an issue.
+برای گزارش خطا، نسخه PHP و Laravel، نام ماژول، مراحل تکرار خطا و بخش مرتبط از Log را ارسال کنید. هیچ‌وقت `.env`، Token ربات، رمز پنل، لینک خصوصی Subscription یا UUID کاربران را در Issue یا گروه عمومی ارسال نکنید.
 
-The project metadata declares the MIT license. See `composer.json` and the repository's GitHub project for the applicable license and contribution terms.
+اطلاعات پروژه در `composer.json` با مجوز MIT اعلام شده است.
