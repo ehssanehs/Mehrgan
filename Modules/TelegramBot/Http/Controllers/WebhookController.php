@@ -1097,7 +1097,10 @@ class WebhookController extends BaseController
                     'callback_data' => 'admin_reply_cancel',
                 ]),
             ]);
-            $this->sendOrEditMessage($chatId, "✉️ لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):", $keyboard, $messageId);
+            // ⚠️ متن باید با escape() برای MarkdownV2 آماده شود، وگرنه تلگرام پیام را با خطای
+            // "can't parse entities" رد می‌کند و ادمین هیچ پیامی برای نوشتن پاسخ نمی‌بیند.
+            $message = "✉️ " . $this->escape("لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):");
+            $this->sendOrEditMessage($chatId, $message, $keyboard, $messageId);
             return;
         }
 
@@ -3706,10 +3709,12 @@ class WebhookController extends BaseController
 
     protected function promptForTicketReply($user, $ticketId, $messageId)
     {
-        $ticketIdEscaped = $this->escape($ticketId);
         $user->update(['bot_state' => 'awaiting_ticket_reply|' . $ticketId]);
         $keyboard = Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '❌ انصراف', 'callback_data' => '/cancel_action'])]);
-        $this->sendOrEditMessage($user->telegram_chat_id, "✏️ لطفاً پاسخ خود را برای تیکت \\#{$ticketIdEscaped} وارد کنید (می‌توانید عکس هم ارسال کنید):", $keyboard, $messageId);
+        // ⚠️ متن باید با escape() برای MarkdownV2 آماده شود، وگرنه تلگرام پیام را با خطای
+        // "can't parse entities" رد می‌کند و کاربر هیچ پیامی برای نوشتن پاسخ نمی‌بیند.
+        $message = "✏️ " . $this->escape("لطفاً پاسخ خود را برای تیکت #{$ticketId} وارد کنید (می‌توانید عکس هم ارسال کنید):");
+        $this->sendOrEditMessage($user->telegram_chat_id, $message, $keyboard, $messageId);
     }
 
     protected function closeTicket($user, $ticketId, $messageId, $callbackQueryId)
@@ -4904,34 +4909,47 @@ class WebhookController extends BaseController
             'parse_mode'   => 'MarkdownV2',
             'reply_markup' => $keyboard
         ];
+
+        $sendAttempted = false;
+
         try {
             if ($messageId) {
                 $payload['message_id'] = $messageId;
                 Telegram::editMessageText($payload);
             } else {
+                $sendAttempted = true;
                 Telegram::sendMessage($payload);
             }
+            return;
         } catch (\Telegram\Bot\Exceptions\TelegramResponseException $e) {
             if (Str::contains($e->getMessage(), ['message is not modified'])) {
                 Log::info("Message not modified.", ['chat_id' => $chatId]);
-            } elseif (Str::contains($e->getMessage(), ['message to edit not found', 'message identifier is not specified'])) {
-                Log::warning("Could not edit message {$messageId}. Sending new.", ['error' => $e->getMessage()]);
-                unset($payload['message_id']);
-                try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after edit failure: " . $e2->getMessage());}
-            } else {
-                Log::error("Telegram API error: " . $e->getMessage(), ['payload' => $payload, 'trace' => $e->getTraceAsString()]);
-                if ($messageId) {
-                    unset($payload['message_id']);
-                    try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after API error: " . $e2->getMessage());}
-                }
+                return;
             }
+            Log::warning("Telegram API error while editing/sending message: " . $e->getMessage(), ['chat_id' => $chatId, 'message_id' => $messageId]);
         }
         catch (\Exception $e) {
             Log::error("General error during send/edit message: " . $e->getMessage(), ['chat_id' => $chatId, 'trace' => $e->getTraceAsString()]);
-            if($messageId) {
-                unset($payload['message_id']);
-                try { Telegram::sendMessage($payload); } catch (\Exception $e2) {Log::error("Failed to send new message after general failure: " . $e2->getMessage());}
+        }
+
+        // Fallback 1: if editing failed, send the message as a new message (still MarkdownV2)
+        if (!$sendAttempted) {
+            unset($payload['message_id']);
+            try {
+                Telegram::sendMessage($payload);
+                return;
+            } catch (\Exception $e) {
+                Log::warning("Failed to send fallback MarkdownV2 message: " . $e->getMessage(), ['chat_id' => $chatId]);
             }
+        }
+
+        // Fallback 2: send as plain text (no parse_mode) so the user always sees the message
+        // (e.g. when the MarkdownV2 text contains unescaped reserved characters)
+        unset($payload['parse_mode']);
+        try {
+            Telegram::sendMessage($payload);
+        } catch (\Exception $e) {
+            Log::error("Failed to send plain-text fallback message: " . $e->getMessage(), ['chat_id' => $chatId]);
         }
     }
 
