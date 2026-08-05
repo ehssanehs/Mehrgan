@@ -718,10 +718,10 @@ class WebhookController extends BaseController
                     $this->handleAgentMenu($user);
                 }
                 break;
-            case '🔐 اطلاعات ورود به سایت':
-                $this->sendSiteCredentials($user);
-                break;
-            case '📥 Import Existing Subscription':
+            // case '🔐 اطلاعات ورود به سایت':
+            //     $this->sendSiteCredentials($user);
+            //     break;
+            case '📥 ورود اشتراک قبلی به ربات':
             case 'Import Existing Subscription':
                 $this->showImportPrompt($user);
                 break;
@@ -4974,7 +4974,7 @@ class WebhookController extends BaseController
                 Keyboard::inlineButton(['text' => '🎁 دعوت از دوستان', 'callback_data' => '/referral']),
             ])
             ->row([
-                Keyboard::inlineButton(['text' => '📥 Import Subscription', 'callback_data' => '/import_subscription']),
+                Keyboard::inlineButton(['text' => '📥 ورود اشتراک قبلی به ربات', 'callback_data' => '/import_subscription']),
                 Keyboard::inlineButton(['text' => '📚 راهنمای اتصال', 'callback_data' => '/tutorials']),
             ]);
 
@@ -5011,12 +5011,10 @@ class WebhookController extends BaseController
             $keyboard[] = ['📚 راهنمای اتصال'];
         }
 
-        $keyboard[] = ['📥 Import Existing Subscription'];
+        $keyboard[] = ['📥 ورود اشتراک قبلی به ربات'];
 
         if ($showReseller) {
-            $keyboard[] = ['🏢 نمایندگی', '🔐 اطلاعات ورود به سایت'];
-        } else {
-            $keyboard[] = ['🔐 اطلاعات ورود به سایت'];
+            $keyboard[] = ['🏢 نمایندگی'];
         }
 
         return Keyboard::make([
