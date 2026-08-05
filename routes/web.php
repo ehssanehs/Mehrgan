@@ -35,7 +35,7 @@ Route::get('/', function () {
         ")
         ->get();
 
-    $activeTheme = $settings->get('active_theme', 'welcome');
+    $activeTheme = $settings->get('active_theme', 'arcane');
 
     if (!view()->exists("themes.{$activeTheme}")) {
         abort(404, "قالب '{$activeTheme}' یافت نشد.");

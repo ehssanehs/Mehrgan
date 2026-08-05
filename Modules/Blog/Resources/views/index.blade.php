@@ -3,7 +3,6 @@
 @section('title', 'وبلاگ و مقالات آموزشی - دنیای اینترنت آزاد')
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('themes/rocket/css/style.css') }}">
     <style>
 
         body {

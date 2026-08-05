@@ -196,7 +196,6 @@ return [
 
     'attributes' => [
         'data.active_theme' => 'قالب اصلی سایت',
-        'data.active_auth_theme' => 'قالب صفحات ورود/ثبت‌نام',
         'data.site_logo' => 'لوگوی سایت',
 
         'data.marzban_host' => 'آدرس پنل مرزبان',

@@ -1,9 +1,16 @@
+@php
+    $activeTheme = \App\Models\Setting::query()->where('key', 'active_theme')->value('value') ?: 'arcane';
+    $availableThemes = ['welcome', 'rocket', 'arcane', 'cyberpunk', 'dragon', 'phoenix', 'nebula', 'aurora', 'obsidian'];
+    $activeTheme = in_array($activeTheme, $availableThemes, true) ? $activeTheme : 'arcane';
+@endphp
 <!DOCTYPE html>
-<html lang="fa" dir="rtl">
+<html lang="fa" dir="rtl" data-theme="{{ $activeTheme }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>صفحه یافت نشد - 404</title>
+    <link rel="stylesheet" href="{{ asset("themes/{$activeTheme}/css/style.css") }}">
+    <link rel="stylesheet" href="{{ asset('themes/shared/theme-shell.css') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700;900&display=swap');
@@ -45,7 +52,7 @@
         @keyframes glitch-anim-2 { 0% { clip-path: inset(15% 0 60% 0); } 100% { clip-path: inset(55% 0 20% 0); } }
     </style>
 </head>
-<body class="bg-[#1a1a2e] text-white flex items-center justify-center min-h-screen">
+<body class="theme-shell flex items-center justify-center min-h-screen">
 <div class="text-center">
     <div class="glitch" data-text="404">
         404
