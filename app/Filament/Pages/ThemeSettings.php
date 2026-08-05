@@ -86,6 +86,8 @@ class ThemeSettings extends Page implements HasForms
 
         $this->form->fill(array_merge([
             'panel_type' => 'marzban',
+            // The selected site theme is shared by public, authentication, and customer pages.
+            'active_theme' => 'arcane',
             'xui_host' => null,
             'xui_user' => null,
             'xui_pass' => null,
@@ -118,12 +120,7 @@ class ThemeSettings extends Page implements HasForms
                                 'nebula' => 'قالب Nebula (کهکشانی)',
                                 'aurora' => 'قالب Aurora (روشن)',
                                 'obsidian' => 'قالب Obsidian (طلایی)',
-                            ])->default('welcome')->live(),
-                            Select::make('active_auth_theme')->label('قالب صفحات ورود/ثبت‌نام')->options([
-                                'default' => 'قالب پیش‌فرض (Breeze)',
-                                'cyberpunk' => 'قالب سایبرپانک',
-                                'rocket' => 'قالب RoketVPN (موشکی)',
-                            ])->default('cyberpunk')->live(),
+                            ])->default('arcane')->live(),
                         ]),
 
                     Tabs\Tab::make('محتوای قالب RoketVPN (موشکی)')

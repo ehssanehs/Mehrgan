@@ -13,7 +13,6 @@
 @endsection
 
 @push('styles')
-    <link rel="stylesheet" href="{{ asset('themes/rocket/css/style.css') }}">
     <style>
         .blog-content { color: #e0e0e0; line-height: 1.8; text-align: justify; }
         .blog-content h2, .blog-content h3 { color: #E64A19; margin-top: 2rem; margin-bottom: 1rem; }
