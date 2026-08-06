@@ -63,9 +63,10 @@ class PlanResource extends Resource
                 Forms\Components\Select::make('server_type')
                     ->label('نوع سرور (پنل)')
                     ->options([
-                        'all' => 'همه سرورها (سنایی و مرزبان)',
+                        'all' => 'همه سرورها (سنایی، مرزبان و PasarGuard)',
                         'xui' => 'فقط سنایی / X-UI',
                         'marzban' => 'فقط مرزبان',
+                        'pasarguard' => 'فقط PasarGuard',
                     ])
                     ->default('all')
                     ->required()
@@ -113,12 +114,16 @@ class PlanResource extends Resource
                         'all' => 'همه',
                         'xui' => 'سنایی',
                         'marzban' => 'مرزبان',
+                        'pasarguard' => 'PasarGuard',
+                        default => $state,
                     })
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'all' => 'gray',
                         'xui' => 'success',
                         'marzban' => 'warning',
+                        'pasarguard' => 'info',
+                        default => 'gray',
                     }),
 
 
