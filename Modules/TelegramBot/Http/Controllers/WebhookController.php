@@ -3285,7 +3285,7 @@ class WebhookController extends BaseController
                     'data_limit' => $plan->volume_gb * 1024 * 1024 * 1024,
                 ]);
 
-                if (!empty($response['subscription_url'])) {
+                if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
                     $configData['link'] = $pasarguard->generateSubscriptionLink($response);
                     $configData['username'] = $uniqueUsername;
                 } else {
@@ -3883,10 +3883,10 @@ class WebhookController extends BaseController
             // --- PASARGUARD ---
             if ($panelType === 'pasarguard') {
                 $pasarguard = new PasarGuardService(
-                    $settings->get('pasarguard_host'),
-                    $settings->get('pasarguard_username'),
-                    $settings->get('pasarguard_password'),
-                    $settings->get('pasarguard_node_hostname')
+                    $isMultiServer ? ($pasarguardHost ?? '') : (string) $settings->get('pasarguard_host'),
+                    $isMultiServer ? ($pasarguardUser ?? '') : (string) $settings->get('pasarguard_username'),
+                    $isMultiServer ? ($pasarguardPass ?? '') : (string) $settings->get('pasarguard_password'),
+                    $isMultiServer ? ($pasarguardNode ?? '') : (string) $settings->get('pasarguard_node_hostname')
                 );
 
                 $updateResponse = $pasarguard->updateUser($uniqueUsername, [
@@ -3908,10 +3908,10 @@ class WebhookController extends BaseController
             // --- MARZBAN ---
             elseif ($panelType === 'marzban') {
                 $marzban = new MarzbanService(
-                    $settings->get('marzban_host'),
-                    $settings->get('marzban_sudo_username'),
-                    $settings->get('marzban_sudo_password'),
-                    $settings->get('marzban_node_hostname')
+                    $isMultiServer ? ($marzbanHost ?? '') : (string) $settings->get('marzban_host'),
+                    $isMultiServer ? ($marzbanUser ?? '') : (string) $settings->get('marzban_sudo_username'),
+                    $isMultiServer ? ($marzbanPass ?? '') : (string) $settings->get('marzban_sudo_password'),
+                    $isMultiServer ? ($marzbanNode ?? '') : (string) $settings->get('marzban_node_hostname')
                 );
 
                 $updateResponse = $marzban->updateUser($uniqueUsername, [
@@ -4528,26 +4528,39 @@ class WebhookController extends BaseController
 
                 // اعمال تنظیمات سرور انتخاب شده
                 if ($targetServer) {
-                    $panelType = 'xui';
+                    $panelType = strtolower($targetServer->type ?? 'xui');
+                    if ($panelType === 'sanaei') $panelType = 'xui';
                     $xuiHost = $targetServer->full_host;
                     $xuiUser = $targetServer->username;
                     $xuiPass = $targetServer->password;
                     $inboundId = $targetServer->inbound_id;
                     $linkType = $targetServer->link_type ?? 'single';
+                    $marzbanHost = $targetServer->full_host;
+                    $marzbanUser = $targetServer->username;
+                    $marzbanPass = $targetServer->password;
+                    $marzbanNode = $targetServer->marzban_node_hostname ?? $marzbanHost;
+                    $pasarguardHost = $targetServer->full_host;
+                    $pasarguardUser = $targetServer->username;
+                    $pasarguardPass = $targetServer->password;
+                    $pasarguardNode = $targetServer->pasarguard_node_hostname ?? $pasarguardHost;
                 }
             }
 
             if ($panelType === 'pasarguard') {
-                $pasarguardHost = $settings->get('pasarguard_host');
+                $pasarguardHost = $targetServer ? $targetServer->full_host : $settings->get('pasarguard_host');
+                $pasarguardUser = $targetServer ? $targetServer->username : $settings->get('pasarguard_username');
+                $pasarguardPass = $targetServer ? $targetServer->password : $settings->get('pasarguard_password');
+                $pasarguardNode = $targetServer ? ($targetServer->pasarguard_node_hostname ?? $pasarguardHost) : $settings->get('pasarguard_node_hostname');
+
                 if (empty($pasarguardHost)) {
                      throw new \Exception('آدرس پنل PasarGuard تنظیم نشده است.');
                 }
                 
                 $pasarguardService = new PasarGuardService(
                     (string) $pasarguardHost,
-                    (string) $settings->get('pasarguard_username'),
-                    (string) $settings->get('pasarguard_password'),
-                    (string) $settings->get('pasarguard_node_hostname')
+                    (string) $pasarguardUser,
+                    (string) $pasarguardPass,
+                    (string) $pasarguardNode
                 );
                 $response = $pasarguardService->createUser([
                     'username' => $uniqueUsername,
@@ -4555,23 +4568,27 @@ class WebhookController extends BaseController
                     'data_limit' => $dataLimitBytes,
                 ]);
 
-                if ($response && !empty($response['subscription_url'])) {
+                if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
                     $configLink = $pasarguardService->generateSubscriptionLink($response);
                 } else {
                     throw new \Exception('خطا در ارتباط با پنل PasarGuard.');
                 }
 
             } elseif ($panelType === 'marzban') {
-                $marzbanHost = $settings->get('marzban_host');
+                $marzbanHost = $targetServer ? $targetServer->full_host : $settings->get('marzban_host');
+                $marzbanUser = $targetServer ? $targetServer->username : $settings->get('marzban_sudo_username');
+                $marzbanPass = $targetServer ? $targetServer->password : $settings->get('marzban_sudo_password');
+                $marzbanNode = $targetServer ? ($targetServer->marzban_node_hostname ?? $marzbanHost) : $settings->get('marzban_node_hostname');
+
                 if (empty($marzbanHost)) {
                      throw new \Exception('آدرس پنل مرزبان تنظیم نشده است.');
                 }
                 
                 $marzbanService = new MarzbanService(
                     (string) $marzbanHost,
-                    (string) $settings->get('marzban_sudo_username'),
-                    (string) $settings->get('marzban_sudo_password'),
-                    (string) $settings->get('marzban_node_hostname')
+                    (string) $marzbanUser,
+                    (string) $marzbanPass,
+                    (string) $marzbanNode
                 );
                 $response = $marzbanService->createUser([
                     'username' => $uniqueUsername,
@@ -4579,8 +4596,8 @@ class WebhookController extends BaseController
                     'data_limit' => $dataLimitBytes,
                 ]);
 
-                if ($response && !empty($response['subscription_url'])) {
-                    $configLink = $response['subscription_url'];
+                if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
+                    $configLink = $marzbanService->generateSubscriptionLink($response);
                 } else {
                     throw new \Exception('خطا در ارتباط با پنل مرزبان.');
                 }

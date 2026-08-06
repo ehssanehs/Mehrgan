@@ -10,6 +10,7 @@ use App\Models\Setting;
 use App\Models\Transaction;
 use App\Services\ClientNamingService;
 use App\Services\MarzbanService;
+use App\Services\PasarGuardService;
 use App\Services\TelegramOrderNotificationService;
 use App\Services\XUIService;
 use Filament\Forms;
@@ -136,6 +137,11 @@ class OrderResource extends Resource
                             $marzbanPass = $settings->get('marzban_sudo_password');
                             $marzbanNode = $settings->get('marzban_node_hostname');
 
+                            $pasarguardHost = $settings->get('pasarguard_host');
+                            $pasarguardUser = $settings->get('pasarguard_username');
+                            $pasarguardPass = $settings->get('pasarguard_password');
+                            $pasarguardNode = $settings->get('pasarguard_node_hostname');
+
                             // 🔥 اصلاح مهم: پیدا کردن سرور اصلی در حالت تمدید
                             $targetServerId = $order->server_id;
                             if (!$targetServerId && $isRenewal && $originalOrder) {
@@ -188,6 +194,11 @@ class OrderResource extends Resource
                                         $marzbanUser = $targetServer->username;
                                         $marzbanPass = $targetServer->password;
                                         $marzbanNode = $targetServer->marzban_node_hostname ?? $marzbanHost;
+                                    } elseif ($panelType === 'pasarguard') {
+                                        $pasarguardHost = $targetServer->full_host;
+                                        $pasarguardUser = $targetServer->username;
+                                        $pasarguardPass = $targetServer->password;
+                                        $pasarguardNode = $targetServer->pasarguard_node_hostname ?? $pasarguardHost;
                                     } else {
                                         $xuiHost = $targetServer->full_host;
                                         $xuiUser = $targetServer->username;
@@ -209,7 +220,26 @@ class OrderResource extends Resource
                             $finalSubId = null;
 
                             try {
-                                if ($panelType === 'marzban') {
+                                if ($panelType === 'pasarguard') {
+                                    $pasarguardService = new PasarGuardService(
+                                        (string) ($pasarguardHost ?? ''),
+                                        (string) ($pasarguardUser ?? ''),
+                                        (string) ($pasarguardPass ?? ''),
+                                        (string) ($pasarguardNode ?? '')
+                                    );
+                                    $userData = ['expire' => $newExpiresAt->getTimestamp(), 'data_limit' => $plan->volume_gb * 1073741824];
+                                    if ($isRenewal) {
+                                        $response = $pasarguardService->updateUser($uniqueUsername, $userData);
+                                        $pasarguardService->resetUserTraffic($uniqueUsername);
+                                    } else {
+                                        $response = $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                                    }
+                                    if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
+                                        $finalConfig = $pasarguardService->generateSubscriptionLink($response);
+                                        $success = true;
+                                    } else throw new \Exception('خطا در PasarGuard');
+
+                                } elseif ($panelType === 'marzban') {
                                     $marzbanService = new MarzbanService(
                                         (string) ($marzbanHost ?? ''),
                                         (string) ($marzbanUser ?? ''),
@@ -492,7 +522,23 @@ class OrderResource extends Resource
             return;
         }
 
-        if ($panelType === 'marzban') {
+        if ($panelType === 'pasarguard') {
+            $pasarguardHost = $targetServer ? $targetServer->full_host : $settings->get('pasarguard_host');
+            $pasarguardUser = $targetServer ? $targetServer->username : $settings->get('pasarguard_username');
+            $pasarguardPass = $targetServer ? $targetServer->password : $settings->get('pasarguard_password');
+            $pasarguardNode = $targetServer ? ($targetServer->pasarguard_node_hostname ?? $pasarguardHost) : $settings->get('pasarguard_node_hostname');
+
+            $pasarguard = new PasarGuardService(
+                (string) ($pasarguardHost ?? ''),
+                (string) ($pasarguardUser ?? ''),
+                (string) ($pasarguardPass ?? ''),
+                (string) ($pasarguardNode ?? '')
+            );
+
+            $result = $pasarguard->disableUser($username);
+            Log::info('PasarGuard user disabled', ['username' => $username, 'result' => $result]);
+
+        } elseif ($panelType === 'marzban') {
             $marzbanHost = $targetServer ? $targetServer->full_host : $settings->get('marzban_host');
             $marzbanUser = $targetServer ? $targetServer->username : $settings->get('marzban_sudo_username');
             $marzbanPass = $targetServer ? $targetServer->password : $settings->get('marzban_sudo_password');

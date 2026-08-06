@@ -50,8 +50,9 @@ class PasarGuardServiceTest extends TestCase
                 return isset($data['proxy_settings'])
                     && !isset($data['proxies'])
                     && !isset($data['inbounds'])
-                    && isset($data['group_id']) && $data['group_id'] === 0
-                    && isset($data['group_ids']) && $data['group_ids'] === [0];
+                    && !isset($data['group_id'])
+                    && !isset($data['group_ids'])
+                    && ($data['status'] ?? null) === 'active';
             }
             return true;
         });
