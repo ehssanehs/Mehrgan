@@ -68,15 +68,36 @@ trait ManagesServiceProvisioning
         $finalConfig = null;
         $success = false;
 
+        $targetServer = $order->server;
+        if (!$targetServer && $order->server_id && class_exists('Modules\MultiServer\Models\Server')) {
+            $targetServer = \Modules\MultiServer\Models\Server::find($order->server_id);
+        }
+        if (!$targetServer && $isRenewal && $originalOrder && $originalOrder->server_id && class_exists('Modules\MultiServer\Models\Server')) {
+            $targetServer = \Modules\MultiServer\Models\Server::find($originalOrder->server_id);
+        }
+
+        if ($targetServer && $targetServer->is_active) {
+            $panelType = strtolower($targetServer->type ?? $panelType);
+            if ($panelType === 'sanaei') $panelType = 'xui';
+        }
+
         try {
             if ($panelType === 'pasarguard') {
-                $pasarguardService = new PasarGuardService($settings->get('pasarguard_host'), $settings->get('pasarguard_username'), $settings->get('pasarguard_password'), $settings->get('pasarguard_node_hostname'));
+                $pasarguardHost = $targetServer ? $targetServer->full_host : $settings->get('pasarguard_host');
+                $pasarguardUser = $targetServer ? $targetServer->username : $settings->get('pasarguard_username');
+                $pasarguardPass = $targetServer ? $targetServer->password : $settings->get('pasarguard_password');
+                $pasarguardNode = $targetServer ? ($targetServer->pasarguard_node_hostname ?? $pasarguardHost) : $settings->get('pasarguard_node_hostname');
+
+                $pasarguardService = new PasarGuardService((string)$pasarguardHost, (string)$pasarguardUser, (string)$pasarguardPass, (string)$pasarguardNode);
 
                 $userData = ['expire' => $newExpiresAt->getTimestamp(), 'data_limit' => ($plan->volume_gb ?? $plan->data_limit_gb ?? 0) * 1024 * 1024 * 1024];
 
-                $response = $isRenewal
-                    ? $pasarguardService->updateUser($uniqueUsername, $userData)
-                    : $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                if ($isRenewal) {
+                    $response = $pasarguardService->updateUser($uniqueUsername, $userData);
+                    $pasarguardService->resetUserTraffic($uniqueUsername);
+                } else {
+                    $response = $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                }
 
                 if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
                     $finalConfig = $pasarguardService->generateSubscriptionLink($response);
@@ -88,14 +109,22 @@ trait ManagesServiceProvisioning
                 }
 
             } elseif ($panelType === 'marzban') {
-                $marzbanService = new MarzbanService($settings->get('marzban_host'), $settings->get('marzban_sudo_username'), $settings->get('marzban_sudo_password'), $settings->get('marzban_node_hostname'));
+                $marzbanHost = $targetServer ? $targetServer->full_host : $settings->get('marzban_host');
+                $marzbanUser = $targetServer ? $targetServer->username : $settings->get('marzban_sudo_username');
+                $marzbanPass = $targetServer ? $targetServer->password : $settings->get('marzban_sudo_password');
+                $marzbanNode = $targetServer ? ($targetServer->marzban_node_hostname ?? $marzbanHost) : $settings->get('marzban_node_hostname');
+
+                $marzbanService = new MarzbanService((string)$marzbanHost, (string)$marzbanUser, (string)$marzbanPass, (string)$marzbanNode);
 
                 // مطمئن شوید مدل Plan ستون data_limit_gb را دارد (در کد شما volume_gb بود، من به data_limit_gb تغییر دادم)
                 $userData = ['expire' => $newExpiresAt->getTimestamp(), 'data_limit' => ($plan->volume_gb ?? $plan->data_limit_gb ?? 0) * 1024 * 1024 * 1024];
 
-                $response = $isRenewal
-                    ? $marzbanService->updateUser($uniqueUsername, $userData)
-                    : $marzbanService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                if ($isRenewal) {
+                    $response = $marzbanService->updateUser($uniqueUsername, $userData);
+                    $marzbanService->resetUserTraffic($uniqueUsername);
+                } else {
+                    $response = $marzbanService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                }
 
                 if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
                     $finalConfig = $marzbanService->generateSubscriptionLink($response);

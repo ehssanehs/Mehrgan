@@ -625,9 +625,12 @@ class OrderController extends Controller
                         'data_limit' => $plan->volume_gb * 1073741824
                     ];
 
-                    $response = $isRenewal
-                        ? $pasarguardService->updateUser($uniqueUsername, $userData)
-                        : $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                    if ($isRenewal) {
+                        $response = $pasarguardService->updateUser($uniqueUsername, $userData);
+                        $pasarguardService->resetUserTraffic($uniqueUsername);
+                    } else {
+                        $response = $pasarguardService->createUser(array_merge($userData, ['username' => $uniqueUsername]));
+                    }
 
                     if ($response && (isset($response['subscription_url']) || isset($response['username']))) {
                         $finalConfig = $pasarguardService->generateSubscriptionLink($response);

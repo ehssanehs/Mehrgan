@@ -18,7 +18,7 @@ class PasarGuardService implements VpnServiceInterface
                 return true;
             }
 
-            $response = Http::asForm()->post($server->api_url . '/api/admin/token', [
+            $response = Http::asForm()->timeout(15)->post($server->api_url . '/api/admin/token', [
                 'username' => $server->username,
                 'password' => $server->password,
             ]);
@@ -44,8 +44,6 @@ class PasarGuardService implements VpnServiceInterface
         try {
             $expire = $product->period_days > 0 ? time() + ($product->period_days * 86400) : 0;
             
-            $inboundTags = array_map('trim', explode(',', $product->remote_id));
-            
             $protocol = strtolower($product->protocol ?? '');
             $proxies = [];
             
@@ -63,8 +61,6 @@ class PasarGuardService implements VpnServiceInterface
                 'expire' => $expire,
                 'data_limit' => (int) $product->traffic_limit,
                 'data_limit_reset_strategy' => 'no_reset',
-                'group_id' => 0,
-                'group_ids' => [0],
                 'status' => 'active',
                 'note' => 'Reseller: ' . ($product->name ?? 'Unknown'),
             ];
@@ -77,16 +73,33 @@ class PasarGuardService implements VpnServiceInterface
                 ->timeout(15)
                 ->post($server->api_url . '/api/user', $payload);
 
+            if ($response->status() === 401) {
+                $this->token = null;
+                if ($this->login($server)) {
+                    $response = Http::withToken($this->token)
+                        ->timeout(15)
+                        ->post($server->api_url . '/api/user', $payload);
+                }
+            }
+
             if ($response->successful()) {
                 $data = $response->json();
                 
-                $subPath = $data['subscription_url'] ?? ''; 
-                $subLink = $server->sub_url . $subPath;
+                $subPath = trim($data['subscription_url'] ?? '');
+                if (preg_match("~^(?:f|ht)tps?://~i", $subPath)) {
+                    $subLink = $subPath;
+                } else {
+                    $subBase = !empty($server->sub_url) ? rtrim($server->sub_url, '/') : rtrim($server->api_url, '/');
+                    if (!str_starts_with($subPath, '/') && !empty($subPath)) {
+                        $subPath = '/' . $subPath;
+                    }
+                    $subLink = $subBase . $subPath;
+                }
 
                 return [
                     'success' => true,
                     'data' => [
-                        'username' => $data['username'],
+                        'username' => $data['username'] ?? $username,
                         'uuid' => null,
                         'subscription_url' => $subLink,
                         'raw' => $data
@@ -109,6 +122,12 @@ class PasarGuardService implements VpnServiceInterface
 
         try {
             $response = Http::withToken($this->token)->delete($server->api_url . "/api/user/{$identifier}");
+            if ($response->status() === 401) {
+                $this->token = null;
+                if ($this->login($server)) {
+                    $response = Http::withToken($this->token)->delete($server->api_url . "/api/user/{$identifier}");
+                }
+            }
             return $response->successful();
         } catch (\Exception $e) {
             Log::error("PasarGuard Delete Exception: " . $e->getMessage());
@@ -122,6 +141,12 @@ class PasarGuardService implements VpnServiceInterface
 
         try {
             $response = Http::withToken($this->token)->get($server->api_url . "/api/user/{$identifier}");
+            if ($response->status() === 401) {
+                $this->token = null;
+                if ($this->login($server)) {
+                    $response = Http::withToken($this->token)->get($server->api_url . "/api/user/{$identifier}");
+                }
+            }
             return $response->successful() ? $response->json() : null;
         } catch (\Exception $e) {
             return null;
@@ -158,6 +183,14 @@ class PasarGuardService implements VpnServiceInterface
         try {
             $response = Http::withToken($this->token)
                 ->put($server->api_url . "/api/user/{$identifier}", $payload);
+
+            if ($response->status() === 401) {
+                $this->token = null;
+                if ($this->login($server)) {
+                    $response = Http::withToken($this->token)
+                        ->put($server->api_url . "/api/user/{$identifier}", $payload);
+                }
+            }
 
             if ($response->successful()) {
                 // Reset traffic usage
