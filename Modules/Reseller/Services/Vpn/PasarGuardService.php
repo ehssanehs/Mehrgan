@@ -48,27 +48,23 @@ class PasarGuardService implements VpnServiceInterface
             
             $protocol = strtolower($product->protocol ?? '');
             $proxies = [];
-            $inbounds = [];
             
-            if (!empty($protocol)) {
+            if (!empty($protocol) && $protocol !== 'other') {
                 $proxies[$protocol] = new \stdClass();
-                if (!empty($inboundTags)) {
-                    $inbounds[$protocol] = $inboundTags;
-                }
             } else {
                 $proxies['shadowsocks'] = new \stdClass();
                 $proxies['vless'] = new \stdClass();
                 $proxies['vmess'] = new \stdClass();
-                $inbounds = new \stdClass();
             }
 
             $payload = [
                 'username' => $username,
-                'proxies' => $proxies,
-                'inbounds' => $inbounds,
+                'proxy_settings' => $proxies,
                 'expire' => $expire,
                 'data_limit' => (int) $product->traffic_limit,
                 'data_limit_reset_strategy' => 'no_reset',
+                'group_id' => 0,
+                'group_ids' => [0],
                 'status' => 'active',
                 'note' => 'Reseller: ' . ($product->name ?? 'Unknown'),
             ];

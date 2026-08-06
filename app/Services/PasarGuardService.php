@@ -72,8 +72,8 @@ class PasarGuardService
         }
 
         try {
-            // Prepare proxies (PasarGuard supports vless, vmess, shadowsocks, trojan, etc.)
-            $proxies = $userData['proxies'] ?? [];
+            // Prepare proxy settings (PasarGuard uses proxy_settings instead of proxies)
+            $proxies = $userData['proxy_settings'] ?? $userData['proxies'] ?? [];
             if (empty($proxies)) {
                 $proxies = [
                     'shadowsocks' => new \stdClass(),
@@ -92,27 +92,21 @@ class PasarGuardService
                 $proxies = $temp;
             }
 
-            // Prepare inbounds/groups
-            $inbounds = $userData['inbounds'] ?? [];
-            if (is_array($inbounds) && empty($inbounds)) {
-                $inbounds = new \stdClass();
+            $groupId = isset($userData['group_id']) ? (int) $userData['group_id'] : 0;
+            $groupIds = $userData['group_ids'] ?? [$groupId];
+            if (empty($groupIds)) {
+                $groupIds = [0];
             }
-
-            $groupIds = $userData['group_ids'] ?? [];
 
             $payload = [
                 'username' => $userData['username'],
-                'proxies' => $proxies,
-                'inbounds' => $inbounds,
+                'proxy_settings' => $proxies,
                 'expire' => $userData['expire'],
                 'data_limit' => (int)$userData['data_limit'],
                 'data_limit_reset_strategy' => 'no_reset',
+                'group_id' => (int) $groupId,
+                'group_ids' => $groupIds,
             ];
-
-            // Add group_ids if provided (PasarGuard uses groups)
-            if (!empty($groupIds)) {
-                $payload['group_ids'] = $groupIds;
-            }
 
             // Manually encode to JSON to ensure correct types
             $jsonPayload = json_encode($payload);
@@ -123,6 +117,7 @@ class PasarGuardService
             ]);
 
             $response = Http::withToken($this->accessToken)
+                ->timeout(15)
                 ->withHeaders([
                     'Accept' => 'application/json',
                     'Content-Type' => 'application/json'
@@ -151,8 +146,8 @@ class PasarGuardService
                 'data_limit' => $userData['data_limit'],
             ];
 
-            if (isset($userData['proxies'])) {
-                $proxies = $userData['proxies'];
+            if (isset($userData['proxy_settings']) || isset($userData['proxies'])) {
+                $proxies = $userData['proxy_settings'] ?? $userData['proxies'];
                 $temp = [];
                 foreach ((array)$proxies as $key => $val) {
                     if (is_numeric($key)) {
@@ -161,11 +156,11 @@ class PasarGuardService
                         $temp[$key] = empty($val) ? new \stdClass() : $val;
                     }
                 }
-                $payload['proxies'] = $temp;
+                $payload['proxy_settings'] = $temp;
             }
 
-            if (isset($userData['inbounds'])) {
-                $payload['inbounds'] = $userData['inbounds'];
+            if (isset($userData['group_id'])) {
+                $payload['group_id'] = (int) $userData['group_id'];
             }
 
             if (isset($userData['group_ids'])) {
@@ -173,6 +168,7 @@ class PasarGuardService
             }
 
             $response = Http::withToken($this->accessToken)
+                ->timeout(15)
                 ->withHeaders(['Accept' => 'application/json'])
                 ->put($this->baseUrl . "/api/user/{$username}", $payload);
 
@@ -305,10 +301,10 @@ class PasarGuardService
         $users = $this->getAllUsers();
 
         foreach ($users as $user) {
-            // Check proxies for matching UUID
-            $proxies = $user['proxies'] ?? [];
+            // Check proxy_settings for matching UUID (PasarGuard uses proxy_settings instead of proxies)
+            $proxies = $user['proxy_settings'] ?? $user['proxies'] ?? [];
             foreach ($proxies as $protocol => $proxyData) {
-                if (isset($proxyData['id']) && strtolower(trim($proxyData['id'])) === $uuid) {
+                if (is_array($proxyData) && isset($proxyData['id']) && strtolower(trim((string)$proxyData['id'])) === $uuid) {
                     Log::info('Found PasarGuard user by UUID', [
                         'uuid' => $uuid,
                         'username' => $user['username'] ?? 'unknown',
@@ -316,7 +312,7 @@ class PasarGuardService
                     ]);
                     return $user;
                 }
-                if (isset($proxyData['password']) && strtolower(trim($proxyData['password'])) === $uuid) {
+                if (is_array($proxyData) && isset($proxyData['password']) && strtolower(trim((string)$proxyData['password'])) === $uuid) {
                     return $user;
                 }
             }
@@ -344,26 +340,25 @@ class PasarGuardService
 
     public function generateSubscriptionLink(array $userApiResponse): string
     {
-        if (!isset($userApiResponse['subscription_url'])) {
+        $subscriptionUrl = trim($userApiResponse['subscription_url'] ?? '');
+        if (empty($subscriptionUrl)) {
             // Fallback: try to construct from links if present
             if (isset($userApiResponse['links']) && !empty($userApiResponse['links'])) {
-                return $userApiResponse['links'][0] ?? '';
+                return is_array($userApiResponse['links']) ? ($userApiResponse['links'][0] ?? '') : (string) $userApiResponse['links'];
             }
             return '';
         }
 
-        $subscriptionUrl = trim($userApiResponse['subscription_url']);
-        
         // If PasarGuard returns a full URL
         if (preg_match("~^(?:f|ht)tps?://~i", $subscriptionUrl)) {
             return $subscriptionUrl;
         }
-        
+
         // If it starts with /http...
         if (preg_match("~^/(?:f|ht)tps?://~i", $subscriptionUrl)) {
              return ltrim($subscriptionUrl, '/');
         }
-        
+
         // Ensure one slash between host and path
         if (!str_starts_with($subscriptionUrl, '/')) {
             $subscriptionUrl = '/' . $subscriptionUrl;
