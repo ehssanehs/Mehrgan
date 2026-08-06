@@ -77,6 +77,121 @@ class PasarGuardService
         }
     }
 
+    /**
+     * Return the groups that the authenticated admin may assign to users.
+     *
+     * PasarGuard users do not inherit a default group. A user without at
+     * least one group has no inbound tags and therefore receives an empty
+     * subscription. Newer PasarGuard releases expose the RBAC-compatible
+     * `groups/simple` endpoint, while older releases only expose `groups`.
+     */
+    public function getGroups(): ?array
+    {
+        if (!$this->accessToken && !$this->login()) {
+            return null;
+        }
+
+        $endpoints = [
+            ['/api/groups/simple', ['all' => 'true']],
+            ['/api/groups', ['offset' => 0, 'limit' => 1000]],
+        ];
+
+        foreach ($endpoints as [$path, $query]) {
+            try {
+                $response = Http::withToken($this->accessToken)
+                    ->timeout(15)
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->get($this->baseUrl . $path, $query);
+
+                if ($response->status() === 401 && $this->login()) {
+                    $response = Http::withToken($this->accessToken)
+                        ->timeout(15)
+                        ->withHeaders(['Accept' => 'application/json'])
+                        ->get($this->baseUrl . $path, $query);
+                }
+
+                if (!$response->successful()) {
+                    Log::warning('PasarGuard Get Groups endpoint failed:', [
+                        'url' => $this->baseUrl . $path,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+                    continue;
+                }
+
+                $data = $response->json();
+                $groups = is_array($data) ? ($data['groups'] ?? $data) : [];
+
+                if (!is_array($groups)) {
+                    continue;
+                }
+
+                // The full endpoint includes disabled state. The simple
+                // endpoint intentionally only includes id and name.
+                return array_values(array_filter($groups, static function ($group): bool {
+                    return is_array($group)
+                        && isset($group['id'])
+                        && (int) $group['id'] > 0
+                        && !($group['is_disabled'] ?? false);
+                }));
+            } catch (\Exception $e) {
+                Log::warning('PasarGuard Get Groups Exception:', [
+                    'url' => $this->baseUrl . $path,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get all assignable group IDs. Null means the API could not be read;
+     * an empty array means the panel currently has no enabled groups.
+     */
+    public function getAllGroupIds(): ?array
+    {
+        $groups = $this->getGroups();
+        if ($groups === null) {
+            return null;
+        }
+
+        return array_values(array_unique(array_map(
+            static fn (array $group): int => (int) $group['id'],
+            $groups
+        )));
+    }
+
+    private function normalizeGroupIds(mixed $groupIds): array
+    {
+        if (is_string($groupIds)) {
+            $decoded = json_decode($groupIds, true);
+            $groupIds = is_array($decoded)
+                ? $decoded
+                : preg_split('/[,\s]+/', $groupIds, -1, PREG_SPLIT_NO_EMPTY);
+        }
+
+        if (!is_array($groupIds)) {
+            $groupIds = $groupIds === null ? [] : [$groupIds];
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map('intval', $groupIds),
+            static fn (int $id): bool => $id > 0
+        )));
+    }
+
+    private function explicitGroupIds(array $userData): array
+    {
+        $groupIds = $this->normalizeGroupIds($userData['group_ids'] ?? []);
+
+        if (!$groupIds && array_key_exists('group_id', $userData)) {
+            $groupIds = $this->normalizeGroupIds($userData['group_id']);
+        }
+
+        return $groupIds;
+    }
+
     public function createUser(array $userData): ?array
     {
         if (!$this->accessToken) {
@@ -122,15 +237,30 @@ class PasarGuardService
                 $payload['note'] = $userData['note'];
             }
 
-            // Only pass group_ids if valid IDs (> 0) are explicitly provided
-            if (!empty($userData['group_ids']) && is_array($userData['group_ids'])) {
-                $validGroupIds = array_values(array_filter(array_map('intval', $userData['group_ids']), fn($id) => $id > 0));
-                if (!empty($validGroupIds)) {
-                    $payload['group_ids'] = $validGroupIds;
+            // PasarGuard does not assign a default group. Follow the official
+            // client behavior and assign all available groups unless callers
+            // explicitly supplied one or more valid group IDs.
+            $groupIds = $this->explicitGroupIds($userData);
+            if (!$groupIds) {
+                $groupIds = $this->getAllGroupIds();
+
+                if ($groupIds === null) {
+                    Log::error('PasarGuard user creation aborted: groups could not be loaded.');
+                    return [
+                        'detail' => 'Unable to load PasarGuard groups. The user was not created because it would have no outbound configurations.',
+                        'code' => 'pasarguard_groups_unavailable',
+                    ];
                 }
-            } elseif (isset($userData['group_id']) && (int) $userData['group_id'] > 0) {
-                $payload['group_ids'] = [(int) $userData['group_id']];
+
+                if (!$groupIds) {
+                    Log::error('PasarGuard user creation aborted: no enabled groups exist.');
+                    return [
+                        'detail' => 'No enabled PasarGuard groups were found. Add a group with inbound tags before creating users.',
+                        'code' => 'pasarguard_groups_empty',
+                    ];
+                }
             }
+            $payload['group_ids'] = $groupIds;
 
             // Manually encode to JSON to ensure correct types
             $jsonPayload = json_encode($payload);
@@ -222,13 +352,38 @@ class PasarGuardService
                 $payload['proxy_settings'] = $temp;
             }
 
-            if (!empty($userData['group_ids']) && is_array($userData['group_ids'])) {
-                $validGroupIds = array_values(array_filter(array_map('intval', $userData['group_ids']), fn($id) => $id > 0));
-                if (!empty($validGroupIds)) {
-                    $payload['group_ids'] = $validGroupIds;
+            $groupIds = $this->explicitGroupIds($userData);
+            if ($groupIds) {
+                $payload['group_ids'] = $groupIds;
+            } else {
+                // Repair accounts created by older Mehrgan versions without
+                // changing an existing, intentional group selection.
+                $currentUser = $this->getUser($username);
+                if (is_array($currentUser)
+                    && !$this->normalizeGroupIds($currentUser['group_ids'] ?? [])) {
+                    $availableGroupIds = $this->getAllGroupIds();
+                    if ($availableGroupIds) {
+                        $payload['group_ids'] = $availableGroupIds;
+                        Log::info('PasarGuard repairing user with no groups.', [
+                            'username' => $username,
+                            'group_ids' => $availableGroupIds,
+                        ]);
+                    } else {
+                        Log::error('PasarGuard user update aborted: ungrouped user could not be repaired.', [
+                            'username' => $username,
+                            'groups_available' => $availableGroupIds !== null,
+                        ]);
+
+                        return [
+                            'detail' => $availableGroupIds === null
+                                ? 'Unable to load PasarGuard groups. The ungrouped user was not updated.'
+                                : 'No enabled PasarGuard groups were found. The ungrouped user was not updated.',
+                            'code' => $availableGroupIds === null
+                                ? 'pasarguard_groups_unavailable'
+                                : 'pasarguard_groups_empty',
+                        ];
+                    }
                 }
-            } elseif (isset($userData['group_id']) && (int) $userData['group_id'] > 0) {
-                $payload['group_ids'] = [(int) $userData['group_id']];
             }
 
             $response = Http::withToken($this->accessToken)

@@ -35,6 +35,89 @@ class PasarGuardService implements VpnServiceInterface
         return false;
     }
 
+    private function normalizeGroupIds(mixed $groupIds): array
+    {
+        if (is_string($groupIds)) {
+            $decoded = json_decode($groupIds, true);
+            $groupIds = is_array($decoded)
+                ? $decoded
+                : preg_split('/[,\s]+/', $groupIds, -1, PREG_SPLIT_NO_EMPTY);
+        }
+
+        if (!is_array($groupIds)) {
+            $groupIds = $groupIds === null ? [] : [$groupIds];
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map('intval', $groupIds),
+            static fn (int $id): bool => $id > 0
+        )));
+    }
+
+    /**
+     * PasarGuard does not have an implicit default group. Query every group
+     * that the reseller admin can use so newly-created accounts have inbound
+     * tags and produce actual VLESS/VMess/etc. configurations.
+     */
+    private function getAllGroupIds(VpnServer $server): ?array
+    {
+        $endpoints = [
+            ['/api/groups/simple', ['all' => 'true']],
+            ['/api/groups', ['offset' => 0, 'limit' => 1000]],
+        ];
+
+        foreach ($endpoints as [$path, $query]) {
+            try {
+                $response = Http::withToken($this->token)
+                    ->timeout(15)
+                    ->get($server->api_url . $path, $query);
+
+                if ($response->status() === 401) {
+                    $this->token = null;
+                    if ($this->login($server)) {
+                        $response = Http::withToken($this->token)
+                            ->timeout(15)
+                            ->get($server->api_url . $path, $query);
+                    }
+                }
+
+                if (!$response->successful()) {
+                    Log::warning('PasarGuard reseller group endpoint failed.', [
+                        'url' => $server->api_url . $path,
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+                    continue;
+                }
+
+                $data = $response->json();
+                $groups = is_array($data) ? ($data['groups'] ?? $data) : [];
+                if (!is_array($groups)) {
+                    continue;
+                }
+
+                $ids = [];
+                foreach ($groups as $group) {
+                    if (is_array($group)
+                        && isset($group['id'])
+                        && (int) $group['id'] > 0
+                        && !($group['is_disabled'] ?? false)) {
+                        $ids[] = (int) $group['id'];
+                    }
+                }
+
+                return array_values(array_unique($ids));
+            } catch (\Exception $e) {
+                Log::warning('PasarGuard reseller group lookup failed.', [
+                    'url' => $server->api_url . $path,
+                    'message' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
     public function createAccount(VpnServer $server, VpnProduct $product, string $username, ?string $uuid = null): array
     {
         if (!$this->login($server)) {
@@ -66,8 +149,31 @@ class PasarGuardService implements VpnServiceInterface
             ];
 
             if (!empty($server->config['pasarguard_overrides'])) {
-                 $payload = array_merge($payload, $server->config['pasarguard_overrides']);
+                $payload = array_merge($payload, $server->config['pasarguard_overrides']);
             }
+
+            $groupIds = $this->normalizeGroupIds($payload['group_ids'] ?? []);
+            if (!$groupIds && array_key_exists('group_id', $payload)) {
+                $groupIds = $this->normalizeGroupIds($payload['group_id']);
+            }
+            unset($payload['group_id']);
+
+            if (!$groupIds) {
+                $groupIds = $this->getAllGroupIds($server);
+                if ($groupIds === null) {
+                    return [
+                        'success' => false,
+                        'error' => 'Unable to load PasarGuard groups; account creation was stopped to avoid an empty subscription.',
+                    ];
+                }
+                if (!$groupIds) {
+                    return [
+                        'success' => false,
+                        'error' => 'No enabled PasarGuard groups exist. Configure a group with inbound tags first.',
+                    ];
+                }
+            }
+            $payload['group_ids'] = $groupIds;
 
             $response = Http::withToken($this->token)
                 ->timeout(15)
@@ -175,6 +281,20 @@ class PasarGuardService implements VpnServiceInterface
             'expire' => $newExpiry,
             'status' => 'active',
         ];
+
+        // Repair accounts that were created before group auto-assignment was
+        // implemented, without replacing a valid existing group selection.
+        if (!$this->normalizeGroupIds($user['group_ids'] ?? [])) {
+            $groupIds = $this->getAllGroupIds($server);
+            if (!$groupIds) {
+                Log::error('PasarGuard Renew: user has no groups and no groups could be assigned.', [
+                    'identifier' => $identifier,
+                    'groups_available' => $groupIds !== null,
+                ]);
+                return false;
+            }
+            $payload['group_ids'] = $groupIds;
+        }
 
         if ($trafficLimit !== null) {
             $payload['data_limit'] = $trafficLimit * 1024 * 1024 * 1024;
