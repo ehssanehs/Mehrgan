@@ -196,6 +196,12 @@ class PanelSearchService
             }
         }
 
+        // Enrich the details with the authoritative "get client" API record
+        // (getClientTraffics/{email}). The client copy embedded in the inbound
+        // settings misses or zeroes out totalGB/expiryTime on some panel forks,
+        // which made imported subscriptions display an unlimited expiry/volume.
+        self::enrichXuiDetailsFromClientRecord($xuiService, $client, $details, $trafficFound);
+
         return [
             'type' => 'xui',
             'server' => $server,
@@ -205,6 +211,56 @@ class PanelSearchService
             'subscription_link' => $subscriptionLink,
             'details' => $details,
         ];
+    }
+
+    /**
+     * Merge the authoritative getClientTraffics record of a client into the
+     * details array. Only empty/zero values are filled so real values already
+     * read from the inbound settings are never overwritten.
+     */
+    protected static function enrichXuiDetailsFromClientRecord(XUIService $xuiService, array $client, array &$details, bool &$trafficFound): void
+    {
+        $email = $client['email'] ?? ($details['email'] ?? null);
+        if (empty($email)) {
+            return;
+        }
+
+        try {
+            $record = $xuiService->getClientTrafficsByEmail((string) $email);
+            if (!is_array($record)) {
+                return;
+            }
+
+            // `total` (bytes) in the client record == `totalGB` in the settings copy.
+            if (empty($details['totalGB']) && isset($record['total']) && is_numeric($record['total'])) {
+                $details['totalGB'] = (int) $record['total'];
+            }
+
+            if (empty($details['expiryTime']) && !empty($record['expiryTime'])) {
+                $details['expiryTime'] = $record['expiryTime'];
+            }
+
+            if (!$trafficFound && (isset($record['up']) || isset($record['down']))) {
+                $details['traffic_up'] = (int) ($record['up'] ?? 0);
+                $details['traffic_down'] = (int) ($record['down'] ?? 0);
+                $details['traffic_used'] = $details['traffic_up'] + $details['traffic_down'];
+                $trafficFound = true;
+            }
+
+            if (isset($record['enable'])) {
+                $details['enable'] = (bool) $record['enable'];
+                $details['status'] = $details['enable'] ? 'active' : 'disabled';
+            }
+
+            if (empty($details['subId']) && !empty($record['subId'])) {
+                $details['subId'] = $record['subId'];
+            }
+        } catch (\Exception $e) {
+            Log::debug('Could not enrich XUI details from client record', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected static function searchMarzbanServer(Server $server, string $uuid): ?array
@@ -228,6 +284,13 @@ class PanelSearchService
         if (!$user) {
             return null;
         }
+
+        // Now that the username is known, re-read the complete record through
+        // the "get user" API. The paginated /api/users list can omit or
+        // zero-out fields (expire / data_limit / subscription_url) on some
+        // panel versions, which made imported subscriptions display an
+        // unlimited expiry/volume.
+        $user = self::fetchCompleteUserRecord($marzbanService, $user);
 
         $subscriptionLink = $marzbanService->generateSubscriptionLink($user);
 
@@ -309,6 +372,11 @@ class PanelSearchService
             'inbound_id' => $inbound['id'] ?? null,
         ];
 
+        // Read the authoritative values (expire / traffic) through the
+        // "get client" API (see searchXuiServer above for the reason).
+        $trafficFound = false;
+        self::enrichXuiDetailsFromClientRecord($xuiService, $client, $details, $trafficFound);
+
         return [
             'type' => 'xui',
             'server' => null,
@@ -332,6 +400,10 @@ class PanelSearchService
             return null;
         }
 
+        // Re-read the complete record through the "get user" API (see
+        // searchMarzbanServer above for the reason).
+        $foundUser = self::fetchCompleteUserRecord($service, $foundUser);
+
         $subscriptionLink = $service->generateSubscriptionLink($foundUser);
 
         $details = [
@@ -341,6 +413,7 @@ class PanelSearchService
             'data_limit' => $foundUser['data_limit'] ?? 0,
             'used_traffic' => $foundUser['used_traffic'] ?? 0,
             'status' => $foundUser['status'] ?? 'active',
+            'subscription_url' => $foundUser['subscription_url'] ?? null,
         ];
 
         return [
@@ -376,6 +449,12 @@ class PanelSearchService
         if (!$user) {
             return null;
         }
+
+        // Re-read the complete record through the "get user" API. PasarGuard's
+        // paginated /api/users list can omit expire / data_limit /
+        // subscription_url on some versions, which made imported
+        // subscriptions display an unlimited expiry/volume.
+        $user = self::fetchCompleteUserRecord($pasarguardService, $user);
 
         $subscriptionLink = $pasarguardService->generateSubscriptionLink($user);
 
@@ -416,6 +495,10 @@ class PanelSearchService
             return null;
         }
 
+        // Re-read the complete record through the "get user" API (see
+        // searchPasarGuardServer above for the reason).
+        $foundUser = self::fetchCompleteUserRecord($service, $foundUser);
+
         $subscriptionLink = $service->generateSubscriptionLink($foundUser);
 
         $details = [
@@ -425,6 +508,7 @@ class PanelSearchService
             'data_limit' => $foundUser['data_limit'] ?? 0,
             'used_traffic' => $foundUser['used_traffic'] ?? 0,
             'status' => $foundUser['status'] ?? 'active',
+            'subscription_url' => $foundUser['subscription_url'] ?? null,
         ];
 
         return [
@@ -437,6 +521,43 @@ class PanelSearchService
             'subscription_link' => $subscriptionLink,
             'details' => $details,
         ];
+    }
+
+    /**
+     * Re-read the complete user record through the panel's "get user" API
+     * (GET /api/user/{username}) once the username has been resolved from the
+     * UUID search. The paginated users list can omit or zero-out important
+     * fields (expire / data_limit / used_traffic / subscription_url) on some
+     * Marzban / PasarGuard versions, which made imported subscriptions
+     * display an unlimited expiry/volume. The single-user endpoint always
+     * returns the authoritative values, including the subscription_url used
+     * to build the subscription link stored on the order.
+     *
+     * Falls back to the already fetched record when the endpoint is not
+     * reachable, so the import never breaks because of an extra request.
+     *
+     * @param MarzbanService|PasarGuardService $service
+     */
+    protected static function fetchCompleteUserRecord($service, array $user): array
+    {
+        $username = $user['username'] ?? null;
+        if (empty($username)) {
+            return $user;
+        }
+
+        try {
+            $fullUser = $service->getUser((string) $username);
+            if (is_array($fullUser) && !empty($fullUser['username'])) {
+                return array_merge($user, $fullUser);
+            }
+        } catch (\Exception $e) {
+            Log::debug('Could not re-fetch complete user record, using list record', [
+                'username' => $username,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $user;
     }
 
     protected static function buildXuiSubscriptionLink(Server $server, array $client, array $inbound, bool $preferSubscription = false): string

@@ -27,13 +27,27 @@ class SubscriptionImportService
      * 0 / null / empty / negative values mean there is no absolute expiry date, so
      * null is returned (UI renders it as "نامحدود" / unlimited).
      *
+     * Some panels (e.g. PasarGuard and newer Marzban/forks) serialise the
+     * expire field as a date/datetime string ("2026-09-01T00:00:00") instead
+     * of a Unix timestamp. Those strings are parsed as well, otherwise the
+     * subscription would wrongly be treated as unlimited.
+     *
      * @param mixed $value
      * @return Carbon|null
      */
     public static function parseExpiryValue(mixed $value): ?Carbon
     {
-        if ($value === null || $value === '' || !is_numeric($value)) {
+        if ($value === null || $value === '') {
             return null;
+        }
+
+        // Non-numeric expiry values: try to parse them as a date string.
+        if (!is_numeric($value)) {
+            try {
+                return Carbon::parse($value);
+            } catch (\Throwable $e) {
+                return null;
+            }
         }
 
         $value = (int) $value;
@@ -270,8 +284,19 @@ class SubscriptionImportService
             $type = $panelResult['type'];
             $serverId = $panelResult['server_id'] ?? null;
             $server = $panelResult['server'] ?? null;
-            $subscriptionLink = $panelResult['subscription_link'] ?? $originalConfig;
             $details = $panelResult['details'] ?? [];
+
+            // Resolve the subscription link with a clear priority:
+            //   1. the link built by the panel search (e.g. /sub/{token}),
+            //   2. the raw subscription_url coming from the "get user" record,
+            //   3. the input the user pasted (raw vless:// config or sub URL).
+            $subscriptionLink = $panelResult['subscription_link'] ?? null;
+            if (empty($subscriptionLink) && !empty($details['subscription_url'])) {
+                $subscriptionLink = $details['subscription_url'];
+            }
+            if (empty($subscriptionLink)) {
+                $subscriptionLink = $originalConfig;
+            }
 
             // Determine panel username, expiration, traffic
             $panelUsername = null;
@@ -388,6 +413,8 @@ class SubscriptionImportService
             $importMeta['input_type'] = $wasVlessInput ? 'vless' : 'url';
             $importMeta['subscription_link'] = $configDetails;
             $importMeta['original_config'] = $originalConfig;
+            $importMeta['expires_at'] = $expiresAt ? $expiresAt->toIso8601String() : null;
+            $importMeta['panel_username'] = $panelUsername;
             $importMeta['last_synced_at'] = now()->toIso8601String();
 
             // Create order - must behave identically to normal orders
@@ -465,6 +492,21 @@ class SubscriptionImportService
                 $meta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
                 $expiresAt = self::parseExpiryValue($details['expire'] ?? ($panelResult['client']['expire'] ?? 0));
             }
+
+            // Refresh the stored subscription link as well, so orders imported
+            // from a raw vless:// link (or imported before the panel link was
+            // persisted) end up with the subscription link stored in the
+            // database and shown under "My Services" / service details.
+            $subscriptionLink = $panelResult['subscription_link'] ?? ($details['subscription_url'] ?? null);
+            if (!empty($subscriptionLink)) {
+                $meta['subscription_link'] = $subscriptionLink;
+                $storedLink = trim((string) ($order->config_details ?? ''));
+                if (empty($storedLink) || Str::startsWith(strtolower($storedLink), 'vless://')) {
+                    $order->config_details = $subscriptionLink;
+                }
+            }
+
+            $meta['expires_at'] = $expiresAt ? $expiresAt->toIso8601String() : null;
 
             $order->import_meta = $meta;
             $order->expires_at = $expiresAt;
