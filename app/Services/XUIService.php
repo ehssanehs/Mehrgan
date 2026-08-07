@@ -514,6 +514,78 @@ class XUIService
     }
 
     /**
+     * Fetch the authoritative record of a single client (the X-UI "get client" API).
+     *
+     * Endpoint: GET /panel/api/inbounds/getClientTraffics/{email}
+     *
+     * The returned object uses slightly different field names than the client
+     * copy embedded in the inbound settings: `total` (bytes, 0 = unlimited)
+     * instead of `totalGB`, and `expiryTime` in milliseconds. Some forks/panel
+     * versions do not keep the settings copy fully in sync (or zero it out),
+     * which made imported subscriptions show an unlimited expiry/traffic, so
+     * this endpoint is the most reliable source for a client's real values.
+     *
+     * @param string $email Client email/username on the panel
+     * @return array|null ['id','inboundId','enable','email','up','down','total','expiryTime','reset',...] or null when not found
+     */
+    public function getClientTrafficsByEmail(string $email): ?array
+    {
+        if (!$this->login()) {
+            return null;
+        }
+
+        $email = trim($email);
+        if ($email === '') {
+            return null;
+        }
+
+        $endpointsToTry = [
+            "/panel/api/inbounds/getClientTraffics/" . rawurlencode($email),
+            "/panel/api/inbounds/getClientTrafficsByEmail/" . rawurlencode($email),
+        ];
+
+        foreach ($endpointsToTry as $endpoint) {
+            try {
+                $url = $this->baseUrl . $this->basePath . $endpoint;
+                $response = $this->getClient()->get($url);
+
+                if (!$response->successful()) {
+                    continue;
+                }
+
+                $data = $response->json();
+                if (!($data['success'] ?? false)) {
+                    continue;
+                }
+
+                $obj = $data['obj'] ?? null;
+
+                // Most versions return a single object for the email.
+                if (is_array($obj) && isset($obj['email'])) {
+                    return $obj;
+                }
+
+                // Some versions return a list of client records instead.
+                if (is_array($obj)) {
+                    foreach ($obj as $record) {
+                        if (is_array($record) && strcasecmp((string) ($record['email'] ?? ''), $email) === 0) {
+                            return $record;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::debug('XUI getClientTrafficsByEmail request failed', [
+                    'email' => $email,
+                    'endpoint' => $endpoint,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get detailed inbound info with client traffics
      */
     public function getInboundWithClientStats(int $inboundId): ?array
