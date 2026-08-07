@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Order;
 use App\Models\User;
 use App\Services\VlessParserService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,6 +31,26 @@ it('detects VLESS vs URL in telegram flow', function () {
     expect(VlessParserService::detectInputType('invalid'))->toBe('invalid');
 });
 
+it('escapes the imported subscription expiration date for Telegram MarkdownV2', function () {
+    $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
+    $order = new Order([
+        'panel_username' => 'نام کاربری',
+        'panel_client_id' => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'config_details' => 'vless://aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa@example.com:443?type=ws#اشتراک-آزمایشی',
+        'expires_at' => now()->setDate(2026, 8, 7),
+    ]);
+
+    $method = (new ReflectionClass($controller))->getMethod('buildImportSuccessMessage');
+    $method->setAccessible(true);
+    $message = $method->invoke($controller, $order);
+
+    // A raw 2026-08-07 makes Telegram reject a MarkdownV2 message because
+    // hyphens are reserved characters. The result must contain escaped hyphens.
+    expect($message)->toContain('2026\\-08\\-07');
+    expect($message)->not->toContain('2026-08-07');
+    expect(mb_check_encoding($message, 'UTF-8'))->toBeTrue();
+});
+
 it('telegram bot main menu includes import button', function () {
     $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
     $reflection = new ReflectionClass($controller);
@@ -39,7 +60,7 @@ it('telegram bot main menu includes import button', function () {
     $keyboard = $method->invoke($controller, 123456);
     $keyboardArray = $keyboard->toArray();
 
-    // Check that keyboard contains import button text
+    // Check that the reply keyboard contains the Persian import button text.
     $keyboardJson = json_encode($keyboardArray);
-    expect($keyboardJson)->toContain('Import Existing Subscription');
+    expect($keyboardJson)->toContain('ورود اشتراک قبلی به ربات');
 });
