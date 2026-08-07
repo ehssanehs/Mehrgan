@@ -1077,7 +1077,7 @@ class WebhookController extends BaseController
     {
         $panelUsername = trim((string) ($order->panel_username ?? '')) ?: '—';
         $uuid = trim((string) ($order->panel_client_id ?? '')) ?: '—';
-        $expiresAt = $order->expires_at ? $order->expires_at->format('Y-m-d') : 'نامحدود';
+        $expiresAt = $order->expires_at ? to_jalali_date($order->expires_at, 'Y/m/d') : 'نامحدود';
         $configPreview = trim((string) ($order->config_details ?? '')) ?: '—';
 
         // Str::limit is multibyte-safe, unlike substr(), which could split a
@@ -1927,7 +1927,7 @@ class WebhookController extends BaseController
         
         $message = "📊 *گزارشات نمایندگی*\n\n";
         $message .= "👤 نماینده: {$reseller->user->name}\n";
-        $message .= "📅 تاریخ گزارش: " . now()->format('Y/m/d') . "\n\n";
+        $message .= "📅 تاریخ گزارش: " . to_jalali_date(now(), 'Y/m/d') . "\n\n";
         $message .= "📈 *آمار کل:*\n";
         $message .= "• کل اکانت‌ها: *{$totalAccounts}*\n";
         $message .= "• اکانت‌های فعال: *{$activeAccounts}*\n";
@@ -3078,7 +3078,7 @@ class WebhookController extends BaseController
         $message = "🔍 جزئیات سرویس \#{$order->id}\n\n";
         $message .= "{$statusIcon} سرویس: " . $this->escape($planName) . "\n";
         $message .= "👤 نام کاربری: `" . $panelUsername . "`\n";
-        $expiresText = $expiresAt ? $this->escape($expiresAt->format('Y/m/d')) : $this->escape("نامحدود");
+        $expiresText = $expiresAt ? $this->escape(to_jalali_date($expiresAt, 'Y/m/d')) : $this->escape("نامحدود");
         $message .= "🗓 انقضا: " . $expiresText . " \- " . $remainingText . "\n";
         $message .= "📦  حجم:  " . $this->escape($volumeText) . "\n";
         if (!empty($order->config_details)) {
@@ -3198,7 +3198,7 @@ class WebhookController extends BaseController
                 }
 
                 $amount = number_format(abs($transaction->amount));
-                $date = Carbon::parse($transaction->created_at)->format('Y/m/d');
+                $date = to_jalali_date($transaction->created_at, 'Y/m/d');
 
                 $message .= "{$status} *" . $this->escape($type) . "*\n";
                 $message .= "   💸 *مبلغ:* " . $this->escape($amount . " تومان") . "\n";
@@ -3811,7 +3811,7 @@ class WebhookController extends BaseController
 
         $message = "🔄 *تایید تمدید سرویس*\n\n";
         $message .= "▫️ سرویس: *{$this->escape($plan->name)}*\n";
-        $message .= "▫️ تاریخ انقضای فعلی: *" . $this->escape($expiresAt->format('Y/m/d')) . "*\n";
+        $message .= "▫️ تاریخ انقضای فعلی: *" . $this->escape(to_jalali_date($expiresAt, 'Y/m/d')) . "*\n";
         $message .= "▫️ هزینه تمدید ({$plan->duration_days} روز): *" . number_format($plan->price) . " تومان*\n";
         $message .= "▫️ موجودی کیف پول: *" . number_format($balance) . " تومان*\n\n";
         $message .= "لطفاً روش پرداخت برای تمدید را انتخاب کنید:";
