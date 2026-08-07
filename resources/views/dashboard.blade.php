@@ -215,7 +215,17 @@
                                         </div>
                                         @if(!empty($order->config_details))
                                             <div x-show="open" x-transition x-cloak class="mt-4 pt-4 border-t dark:border-gray-700">
-                                                <h4 class="font-bold mb-2 text-gray-900 dark:text-white text-right">اطلاعات سرویس:</h4>
+                                                <h4 class="font-bold mb-2 text-gray-900 dark:text-white text-right">
+                                                    @if($order->is_imported)
+                                                        @if(Str::startsWith(trim($order->config_details ?? ''), 'vless://'))
+                                                            کانفیگ (Config Link):
+                                                        @else
+                                                            لینک اشتراک (Subscription Link):
+                                                        @endif
+                                                    @else
+                                                        اطلاعات سرویس:
+                                                    @endif
+                                                </h4>
                                                 <div class="p-3 bg-gray-100 dark:bg-gray-900 rounded-lg relative" x-data="{copied: false, copyToClipboard(text) { navigator.clipboard.writeText(text); this.copied = true; setTimeout(() => { this.copied = false }, 2000); }}">
                                                     <pre class="text-left text-sm text-gray-800 dark:text-gray-300 whitespace-pre-wrap overflow-x-auto" dir="ltr" style="padding-top: 2.5rem;">{{ $order->config_details }}</pre>
 

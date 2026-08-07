@@ -445,19 +445,24 @@ class PanelSearchService
         $uuid = $client['id'] ?? '';
         $subId = $client['subId'] ?? null;
 
-        $hasExplicitSubConfig = !empty($server->subscription_domain)
-            || !empty($server->subscription_path)
-            || !empty($server->subscription_port);
+        // Build a real /sub/ subscription link whenever we can.
+        //  - 'subscription' servers: always (generate a subId if missing, the
+        //    panel supports subscription links natively).
+        //  - imports (preferSubscription): whenever the client already owns a real
+        //    subId. 3x-ui serves /sub/{subId} for ANY client that has a subId, so
+        //    even a "single" link-type server yields a proper subscription link
+        //    the user can paste into their VPN app. This is what makes VLESS-link
+        //    imports store and show a subscription link in "My Services" instead of
+        //    a single raw vless:// config.
+        $buildSubscription = ($linkType === 'subscription')
+            || ($preferSubscription && $subId);
 
-        // Always build the real subscription link for 'subscription' servers.
-        // For imports (preferSubscription) also build it for 'single' servers that
-        // explicitly configure subscription settings, so "My Services" shows the
-        // /sub/ link instead of a raw VLESS one.
-        if ($linkType === 'subscription' || ($preferSubscription && $hasExplicitSubConfig)) {
-            if (!$subId) {
-                $subId = \Illuminate\Support\Str::random(16);
-            }
+        if ($linkType === 'subscription' && !$subId) {
+            $subId = \Illuminate\Support\Str::random(16);
+            $buildSubscription = true;
+        }
 
+        if ($buildSubscription) {
             $subDomain = $server->subscription_domain ?? parse_url($server->full_host, PHP_URL_HOST);
             $subPort = $server->subscription_port ?? 443;
             $subPath = $server->subscription_path ?? '/sub/';

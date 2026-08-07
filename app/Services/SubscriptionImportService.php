@@ -49,13 +49,17 @@ class SubscriptionImportService
             return Carbon::createFromTimestamp($value);
         }
 
-        // Milliseconds (typical 13-digit timestamps).
+        // Milliseconds (typical 13-digit timestamps, before ~year 2100).
         if ($value < 4102444800000) {
             return Carbon::createFromTimestampMs($value);
         }
 
-        // Microseconds (rare, but some forks report them).
-        return Carbon::createFromTimestamp((int) ($value / 1000));
+        // Anything larger cannot be a valid millisecond timestamp for a realistic
+        // subscription (that would land past year 2099). It must therefore be
+        // expressed in microseconds (or finer) – normalise back to seconds so the
+        // expiry date is correct instead of jumping thousands of years into the
+        // future. Some X-UI / Marzban forks report expiry in microseconds.
+        return Carbon::createFromTimestamp((int) ($value / 1000000));
     }
 
     /**
@@ -211,6 +215,21 @@ class SubscriptionImportService
                 $parsedVlessUris
             );
 
+            // Immediately re-sync the freshly imported order from the panel so the
+            // expiry date (and traffic) shown in "My Services" match the panel
+            // exactly. This is the fix for imports that showed a wrong expire date:
+            // it guarantees the stored `expires_at` is the live panel value and
+            // covers any panel that reports expiry in a non-standard unit on the
+            // first pass. Failures are swallowed so the import still succeeds.
+            try {
+                self::syncOrderWithPanel($order);
+            } catch (\Throwable $e) {
+                Log::debug('Post-import live sync skipped', [
+                    'order_id' => $order->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             Log::info('Subscription imported successfully', [
                 'uuid' => $uuid,
                 'order_id' => $order->id,
@@ -349,12 +368,15 @@ class SubscriptionImportService
             // Find matching plan based on traffic limit
             $plan = self::findMatchingPlan($totalTraffic);
 
-            // If original input was subscription URL, config_details should be that URL.
-            // If VLESS URI, we prefer the account's real subscription link from the
-            // panel (generated during the search) so "My Services" shows a link the
-            // user can actually import into their VPN app. The original input is
-            // always kept in import_meta for reference.
-            $configDetails = $subscriptionLink ?: $originalConfig;
+            // When the user pasted a single VLESS link we must still store the
+            // account's real subscription link (the /sub/... URL the panel knows
+            // about) so "My Services" shows a subscription link they can paste into
+            // any VPN app – not just the raw vless:// config they started from.
+            // For a subscription URL input we keep that URL. We always prefer the
+            // panel-provided subscription link; only fall back to the pasted input
+            // if the panel returned nothing usable.
+            $wasVlessInput = Str::startsWith($originalConfig, 'vless://');
+            $configDetails = !empty($subscriptionLink) ? $subscriptionLink : $originalConfig;
 
             // Ensure configDetails is not empty
             if (empty($configDetails)) {
@@ -363,6 +385,7 @@ class SubscriptionImportService
 
             // Remember which link was saved and mark the order as freshly synced so
             // the dashboard does not need to re-query the panel right away.
+            $importMeta['input_type'] = $wasVlessInput ? 'vless' : 'url';
             $importMeta['subscription_link'] = $configDetails;
             $importMeta['original_config'] = $originalConfig;
             $importMeta['last_synced_at'] = now()->toIso8601String();
