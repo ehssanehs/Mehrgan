@@ -194,8 +194,7 @@
                                             </div>
                                             <div>
                                                 <span class="text-xs text-gray-500">تاریخ انقضا</span>
-                                                <p class="font-mono text-gray-900 dark:text-white" dir="ltr">{{ $order->expires_at ? \Morilog\Jalali\Jalalian::fromCarbon(\Carbon\Carbon::parse($order->expires_at))->format('Y/m/d') : 'نامحدود' }}</p>
-                                            </div>
+                                                <p class="font-mono text-gray-900 dark:text-white" dir="ltr">{{ to_jalali_date($order->expires_at, 'Y/m/d', 'نامحدود') }}</p>                                            </div>
                                             <div class="text-left sm:text-right md:text-left mt-4 sm:mt-0">
                                                 <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 sm:space-x-reverse">
                                                     <form method="POST" action="{{ route('order.renew', $order->id) }}">
