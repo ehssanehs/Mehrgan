@@ -27,7 +27,10 @@ class ManageTrialSettings extends Page implements HasForms
 
     public function mount(): void
     {
-        $settings = Setting::all()->pluck('value', 'key')->toArray();
+        $settings = Setting::all()
+            ->pluck('value', 'key')
+            ->map(fn ($value) => Setting::normalizeValue($value))
+            ->toArray();
         $this->form->fill([
             'trial_enabled' => $settings['trial_enabled'] ?? false,
             'trial_volume_mb' => $settings['trial_volume_mb'] ?? 500,
@@ -46,7 +49,8 @@ class ManageTrialSettings extends Page implements HasForms
                     ->schema([
                         Toggle::make('trial_enabled')
                             ->label('فعال‌سازی اکانت تست')
-                            ->helperText('اگر فعال باشد، کاربران می‌توانند از ربات اکانت تست دریافت کنند.'),
+                            ->default(false)
+                            ->helperText('اگر فعال باشد، دکمه اکانت تست در منوی ربات نمایش داده می‌شود و کاربران می‌توانند اکانت تست دریافت کنند.'),
 
                         // 👇 فیلد جدید انتخاب سرور 👇
                         Select::make('trial_server_id')
@@ -92,11 +96,31 @@ class ManageTrialSettings extends Page implements HasForms
     public function submit(): void
     {
         $data = $this->form->getState();
+
+        // Toggle values must be stored in the same format that the Telegram
+        // webhook reads. In particular, do not let a false value turn into an
+        // empty setting and accidentally fall back to an unrelated default.
+        $data['trial_enabled'] = filter_var(
+            $data['trial_enabled'] ?? false,
+            FILTER_VALIDATE_BOOLEAN
+        ) ? '1' : '0';
+
         foreach ($data as $key => $value) {
             // تبدیل مقدار null به رشته خالی یا ذخیره نکردن آن
             $val = is_null($value) ? '' : $value;
             Setting::updateOrCreate(['key' => $key], ['value' => $val]);
         }
+
+        // Activating the feature from this page is also the user's request to
+        // make it available in the bot. Reset the optional visibility override
+        // so an old `tg_show_trial_button=0` value cannot hide the new feature.
+        if ($data['trial_enabled'] === '1') {
+            Setting::updateOrCreate(
+                ['key' => 'tg_show_trial_button'],
+                ['value' => '1']
+            );
+        }
+
         Notification::make()->title('تنظیمات با موفقیت ذخیره شد.')->success()->send();
     }
 }

@@ -61,8 +61,54 @@ it('telegram bot main menu includes import button', function () {
     $keyboardArray = $keyboard->toArray();
 
     // Check that the reply keyboard contains the Persian import button text.
-    $keyboardJson = json_encode($keyboardArray);
+    $keyboardJson = json_encode($keyboardArray, JSON_UNESCAPED_UNICODE);
     expect($keyboardJson)->toContain('ورود اشتراک قبلی به ربات');
+});
+
+it('shows the trial button when trial activation is enabled', function () {
+    $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
+    $reflection = new ReflectionClass($controller);
+
+    $settings = $reflection->getProperty('settings');
+    $settings->setAccessible(true);
+    $settings->setValue($controller, collect(['trial_enabled' => '1']));
+
+    $method = $reflection->getMethod('getReplyMainMenu');
+    $method->setAccessible(true);
+    $keyboard = json_encode($method->invoke($controller, 123456)->toArray(), JSON_UNESCAPED_UNICODE);
+
+    expect($keyboard)->toContain('اکانت تست');
+});
+
+it('does not show the trial button while trial activation is disabled', function () {
+    $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
+    $reflection = new ReflectionClass($controller);
+
+    $settings = $reflection->getProperty('settings');
+    $settings->setAccessible(true);
+    $settings->setValue($controller, collect(['trial_enabled' => '0']));
+
+    $method = $reflection->getMethod('getReplyMainMenu');
+    $method->setAccessible(true);
+    $keyboard = json_encode($method->invoke($controller, 123456)->toArray(), JSON_UNESCAPED_UNICODE);
+
+    expect($keyboard)->not->toContain('اکانت تست');
+});
+
+it('uses the trial request callback for the inline trial button', function () {
+    $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
+    $reflection = new ReflectionClass($controller);
+
+    $settings = $reflection->getProperty('settings');
+    $settings->setAccessible(true);
+    $settings->setValue($controller, collect(['trial_enabled' => '1']));
+
+    $method = $reflection->getMethod('getMainMenuKeyboard');
+    $method->setAccessible(true);
+    $keyboard = json_encode($method->invoke($controller)->toArray(), JSON_UNESCAPED_UNICODE);
+
+    expect($keyboard)->toContain('اکانت تست');
+    expect($keyboard)->toContain('trial_request');
 });
 
 it('lists imported subscriptions in My Services even without a plan', function () {

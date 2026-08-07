@@ -52,7 +52,9 @@ class WebhookController extends BaseController
     {
         try {
             if ($this->settings->isEmpty()) { // ✅ اصلاح: استفاده از isEmpty() به جای null check
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
 
             $botToken = $this->settings->get('telegram_bot_token');
@@ -90,7 +92,9 @@ class WebhookController extends BaseController
     {
         try {
             if ($this->settings->isEmpty()) { // ✅ اصلاح
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
@@ -134,7 +138,9 @@ class WebhookController extends BaseController
 
         try {
             if ($this->settings->isEmpty()) {
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
@@ -180,7 +186,9 @@ class WebhookController extends BaseController
     {
         try {
             if ($this->settings->isEmpty()) {
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
@@ -211,7 +219,9 @@ class WebhookController extends BaseController
 
         try {
             if ($this->settings->isEmpty()) {
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
@@ -263,7 +273,9 @@ class WebhookController extends BaseController
 
         try {
             if ($this->settings->isEmpty()) {
-                $this->settings = Setting::all()->pluck('value', 'key');
+                $this->settings = Setting::all()->pluck('value', 'key')->map(
+                    fn ($value) => Setting::normalizeValue($value)
+                );
             }
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
@@ -307,7 +319,9 @@ class WebhookController extends BaseController
     public function handle(Request $request)
     {
         try {
-            $this->settings = Setting::all()->pluck('value', 'key');
+            $this->settings = Setting::all()->pluck('value', 'key')->map(
+                fn ($value) => Setting::normalizeValue($value)
+            );
             $botToken = $this->settings->get('telegram_bot_token');
             if (!$botToken) {
                 Log::warning('Telegram bot token is not set.');
@@ -837,7 +851,7 @@ class WebhookController extends BaseController
                 $this->sendFaqList($chatId);
                 break;
             case '🧪 اکانت تست':
-                if (!filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN)) {
+                if (!$this->shouldShowTrialButton()) {
                     Telegram::sendMessage([
                         'chat_id' => $chatId,
                         'text' => $this->escape("⚠️ دریافت اکانت تست در حال حاضر غیرفعال است."),
@@ -1525,6 +1539,11 @@ class WebhookController extends BaseController
             $this->sendCardPaymentInfo($chatId, $orderId, $messageId);
         }
 
+        elseif ($data === 'trial_request') {
+            // The inline menu uses callback_data instead of the reply-keyboard text.
+            // Keep this path in sync with the regular "🧪 اکانت تست" button.
+            $this->handleTrialRequest($user);
+        }
         elseif (Str::startsWith($data, 'copy_trial_link_')) {
             $userId = (int) Str::after($data, 'copy_trial_link_');
             $this->handleTrialCopyLink($user, $messageId);
@@ -4636,15 +4655,22 @@ class WebhookController extends BaseController
 
     protected function handleTrialRequest($user)
     {
-        $settings = $this->settings;
+        // Trial requests may also be triggered by callbacks created before the
+        // current request. Normalize here as well as in handle() so legacy
+        // JSON-encoded values cannot turn numeric limits into zero or make the
+        // configured panel type unrecognizable.
+        $settings = collect($this->settings)->map(
+            fn ($value) => Setting::normalizeValue($value)
+        );
+        $this->settings = $settings;
         $chatId = $user->telegram_chat_id;
 
         Log::info('Trial request initiated', [
             'user_id' => $user->id,
-            'trial_enabled' => $settings->get('trial_enabled'),
+            'trial_enabled' => $this->isTrialEnabled(),
         ]);
 
-        $trialEnabled = filter_var($settings->get('trial_enabled') ?? '0', FILTER_VALIDATE_BOOLEAN);
+        $trialEnabled = $this->isTrialEnabled();
         if (!$trialEnabled) {
             Telegram::sendMessage([
                 'chat_id' => $chatId,
@@ -5588,9 +5614,47 @@ class WebhookController extends BaseController
         return str_replace($chars, array_map(fn($char) => '\\' . $char, $chars), $text);
     }
 
+    /**
+     * Return whether the trial-account feature is enabled in the admin panel.
+     *
+     * `trial_enabled` is the source of truth for the feature. The legacy
+     * `test_account_enabled` key is accepted as a fallback for installations
+     * that saved the old setting name.
+     */
+    protected function isTrialEnabled(): bool
+    {
+        $value = Setting::normalizeValue($this->settings->get('trial_enabled'));
+
+        if ($value === null) {
+            $value = Setting::normalizeValue($this->settings->get('test_account_enabled'));
+        }
+
+        return filter_var($value ?? false, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Decide whether the trial button belongs in a bot menu.
+     *
+     * A visible button must never advertise a disabled feature. The optional
+     * `tg_show_trial_button` setting remains an explicit presentation override;
+     * when it has not been saved yet, it defaults to visible.
+     */
+    protected function shouldShowTrialButton(): bool
+    {
+        if (!$this->isTrialEnabled()) {
+            return false;
+        }
+
+        $visibility = Setting::normalizeValue($this->settings->get('tg_show_trial_button'));
+
+        return $visibility === null
+            || $visibility === ''
+            || filter_var($visibility, FILTER_VALIDATE_BOOLEAN);
+    }
+
     protected function getMainMenuKeyboard(): Keyboard
     {
-        $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+        $showTrial = $this->shouldShowTrialButton();
         $showReferral = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $keyboard = Keyboard::make()->inline()
@@ -5637,7 +5701,7 @@ class WebhookController extends BaseController
     {
         // Mini App feature removed
         $showReseller = filter_var($this->settings->get('tg_show_reseller_button', '1'), FILTER_VALIDATE_BOOLEAN);
-        $showTrial = filter_var($this->settings->get('tg_show_trial_button', '1'), FILTER_VALIDATE_BOOLEAN);
+        $showTrial = $this->shouldShowTrialButton();
         $showReferral = filter_var($this->settings->get('referral_enabled', '1'), FILTER_VALIDATE_BOOLEAN);
 
         $keyboard = [
