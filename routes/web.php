@@ -93,6 +93,29 @@ Route::middleware(['auth', 'not.banned'])->group(function () {
         $orders = $user->orders()->with('plan')->where(function($q){
             $q->whereNotNull('plan_id')->orWhere('is_imported', true);
         })->whereNull('renews_order_id')->latest()->get();
+
+        // Imported orders that were created before the expiry parsing fix (or any
+        // order that was never synced yet) may carry a stale/incorrect expires_at.
+        // Re-sync them from the panel so "My Services" shows the real date. The
+        // sync records a timestamp on every attempt, so we retry at most once per
+        // 24h per order and never block the page on an unreachable panel.
+        foreach ($orders as $order) {
+            if (!$order->is_imported || !$order->panel_client_id) {
+                continue;
+            }
+            $lastSyncedAt = $order->import_meta['last_synced_at'] ?? null;
+            if (!empty($lastSyncedAt)) {
+                try {
+                    if (\Carbon\Carbon::parse($lastSyncedAt)->gte(now()->subHours(24))) {
+                        continue; // already synced recently
+                    }
+                } catch (\Throwable $e) {
+                    // malformed date – treat as never synced and refresh below
+                }
+            }
+            \App\Services\SubscriptionImportService::syncOrderWithPanel($order);
+        }
+
         $transactions = $user->orders()->with('plan')->latest()->get();
         $plans = Plan::where('is_active', true)->orderBy('price')->get();
         $tickets = $user->tickets()->latest()->get();

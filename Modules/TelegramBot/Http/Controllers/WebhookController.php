@@ -2962,13 +2962,13 @@ class WebhookController extends BaseController
                 continue;
             }
 
-            $expiresAt = Carbon::parse($order->expires_at);
+            $expiresAt = $order->expires_at ? Carbon::parse($order->expires_at) : null;
             $now = now();
             $statusIcon = '🟢';
 
-            if ($expiresAt->isPast()) {
+            if ($expiresAt && $expiresAt->isPast()) {
                 $statusIcon = '⚫️';
-            } elseif ($expiresAt->diffInDays($now) <= 7) {
+            } elseif ($expiresAt && $expiresAt->diffInDays($now) <= 7) {
                 $statusIcon = '🟡';
             }
 
@@ -3025,61 +3025,11 @@ class WebhookController extends BaseController
         // Try to refresh live panel data for imported subscriptions so traffic/expire are always accurate
         $liveRefreshed = false;
         if ($order->is_imported && $order->panel_client_id) {
-            try {
-                $panelResult = \App\Services\PanelSearchService::searchByUuid($order->panel_client_id);
-                if ($panelResult) {
-                    $details = $panelResult['details'] ?? [];
-                    $liveMeta = $order->import_meta ?? [];
-                    if (($panelResult['type'] ?? '') === 'xui') {
-                        $total = $details['totalGB'] ?? ($panelResult['client']['totalGB'] ?? 0);
-                        $used = $details['traffic_used'] ?? 0;
-                        $liveMeta['totalGB'] = $total;
-                        $liveMeta['used_traffic'] = $used;
-                        $liveMeta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
-                        if (!empty($details['expiryTime']) && $details['expiryTime'] > 0) {
-                            $expMs = (int) $details['expiryTime'];
-                            $newExp = $expMs < 4102444800 ? Carbon::createFromTimestamp($expMs) : Carbon::createFromTimestampMs($expMs);
-                            if (!$order->expires_at || $order->expires_at->timestamp !== $newExp->timestamp) {
-                                $order->expires_at = $newExp;
-                                $order->save();
-                            }
-                            $expiresAt = $newExp;
-                        } elseif (($details['expiryTime'] ?? 0) == 0) {
-                            $order->expires_at = null;
-                            $order->save();
-                            $expiresAt = null;
-                        }
-                    } else {
-                        $total = $details['data_limit'] ?? 0;
-                        $used = $details['used_traffic'] ?? 0;
-                        $liveMeta['data_limit'] = $total;
-                        $liveMeta['used_traffic'] = $used;
-                        $liveMeta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
-                        if (!empty($details['expire']) && $details['expire'] > 0) {
-                            $expTs = (int) $details['expire'];
-                            $newExp = $expTs > 4102444800000 ? Carbon::createFromTimestampMs($expTs) : ($expTs > 4102444800 ? Carbon::createFromTimestampMs($expTs) : Carbon::createFromTimestamp($expTs));
-                            if (!$order->expires_at || $order->expires_at->timestamp !== $newExp->timestamp) {
-                                $order->expires_at = $newExp;
-                                $order->save();
-                            }
-                            $expiresAt = $newExp;
-                        } elseif (($details['expire'] ?? 0) == 0) {
-                            $order->expires_at = null;
-                            $order->save();
-                            $expiresAt = null;
-                        }
-                    }
-                    $liveMeta['last_synced_at'] = now()->toIso8601String();
-                    $order->import_meta = $liveMeta;
-                    $order->save();
-                    $liveRefreshed = true;
-                }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::debug('Live panel refresh failed for order '.$order->id, ['error' => $e->getMessage()]);
-            }
+            $liveRefreshed = SubscriptionImportService::syncOrderWithPanel($order);
         }
 
-        // Recompute days remaining after possible live refresh
+        // Recompute expiry + days remaining after possible live refresh
+        $expiresAt = $order->expires_at ? Carbon::parse($order->expires_at) : null;
         if ($expiresAt) {
             $daysRemaining = now()->diffInDays($expiresAt, false);
             $daysRemaining = (int) $daysRemaining;

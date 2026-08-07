@@ -132,8 +132,9 @@ class PanelSearchService
         $client = $found['client'];
         $inbound = $found['inbound'];
 
-        // Build subscription link
-        $subscriptionLink = self::buildXuiSubscriptionLink($server, $client, $inbound);
+        // Build subscription link (prefer the real /sub/ link when one can be
+        // derived from the server settings, even for 'single'-type servers).
+        $subscriptionLink = self::buildXuiSubscriptionLink($server, $client, $inbound, true);
 
         // Build details
         $details = [
@@ -270,17 +271,22 @@ class PanelSearchService
         $client = $found['client'];
         $inbound = $found['inbound'];
 
-        // Build subscription link using legacy settings
+        // Build subscription link using legacy settings. When a subscription URL
+        // base is configured we prefer the real /sub/ link (also for 'single'
+        // link type) so imported accounts receive a subscription link.
         $linkType = $settings->get('xui_link_type', 'single');
+        $subId = $client['subId'] ?? null;
+        $subBase = $settings->get('xui_subscription_url_base');
         $subscriptionLink = null;
 
-        if ($linkType === 'subscription') {
-            $subBase = $settings->get('xui_subscription_url_base', $host);
-            $subId = $client['subId'] ?? null;
-            if ($subBase && $subId) {
-                $subscriptionLink = rtrim($subBase, '/') . '/sub/' . $subId;
+        if ($subId && ($linkType === 'subscription' || !empty($subBase))) {
+            $base = !empty($subBase) ? $subBase : $host;
+            if ($base) {
+                $subscriptionLink = rtrim($base, '/') . '/sub/' . $subId;
             }
-        } else {
+        }
+
+        if (!$subscriptionLink) {
             // Build VLESS single link
             $streamSettings = json_decode($inbound['streamSettings'] ?? '{}', true);
             $parsedUrl = parse_url($host);
@@ -433,13 +439,25 @@ class PanelSearchService
         ];
     }
 
-    protected static function buildXuiSubscriptionLink(Server $server, array $client, array $inbound): string
+    protected static function buildXuiSubscriptionLink(Server $server, array $client, array $inbound, bool $preferSubscription = false): string
     {
         $linkType = $server->link_type ?? 'single';
         $uuid = $client['id'] ?? '';
-        $subId = $client['subId'] ?? \Illuminate\Support\Str::random(16);
+        $subId = $client['subId'] ?? null;
 
-        if ($linkType === 'subscription') {
+        $hasExplicitSubConfig = !empty($server->subscription_domain)
+            || !empty($server->subscription_path)
+            || !empty($server->subscription_port);
+
+        // Always build the real subscription link for 'subscription' servers.
+        // For imports (preferSubscription) also build it for 'single' servers that
+        // explicitly configure subscription settings, so "My Services" shows the
+        // /sub/ link instead of a raw VLESS one.
+        if ($linkType === 'subscription' || ($preferSubscription && $hasExplicitSubConfig)) {
+            if (!$subId) {
+                $subId = \Illuminate\Support\Str::random(16);
+            }
+
             $subDomain = $server->subscription_domain ?? parse_url($server->full_host, PHP_URL_HOST);
             $subPort = $server->subscription_port ?? 443;
             $subPath = $server->subscription_path ?? '/sub/';
@@ -458,7 +476,29 @@ class PanelSearchService
             }
 
             return rtrim($base, '/') . $subPath . $subId;
-        } elseif ($linkType === 'tunnel') {
+        }
+
+        // Legacy single-server setups store the subscription URL base as a global
+        // setting. When importing, prefer that link — but only when the base host
+        // matches this server's panel host, so we never hand out another server's
+        // subscription link.
+        if ($preferSubscription && $subId && $linkType !== 'tunnel') {
+            try {
+                $legacyBase = \App\Models\Setting::all()->pluck('value', 'key')->get('xui_subscription_url_base');
+                if (!empty($legacyBase)) {
+                    $normalized = preg_match('#^[a-z][a-z0-9+.-]*://#i', $legacyBase) ? $legacyBase : 'http://' . $legacyBase;
+                    $baseHost = parse_url($normalized, PHP_URL_HOST);
+                    $serverHost = parse_url($server->full_host, PHP_URL_HOST);
+                    if ($baseHost && $serverHost && strtolower($baseHost) === strtolower($serverHost)) {
+                        return rtrim($legacyBase, '/') . '/sub/' . $subId;
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::debug('Failed to read xui_subscription_url_base setting', ['error' => $e->getMessage()]);
+            }
+        }
+
+        if ($linkType === 'tunnel') {
             $tunnelAddress = $server->tunnel_address ?? $server->ip_address;
             $tunnelPort = $server->tunnel_port ?? 443;
             $streamSettings = is_string($inbound['streamSettings'] ?? '') ? json_decode($inbound['streamSettings'], true) : ($inbound['streamSettings'] ?? []);

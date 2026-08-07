@@ -13,6 +13,52 @@ use Illuminate\Support\Str;
 class SubscriptionImportService
 {
     /**
+     * Convert a raw panel expiry value into a Carbon instance.
+     *
+     * Panels report expiry in different units depending on the panel/version:
+     *   - X-UI (3x-ui / Sanaei): milliseconds, 0 = unlimited, negative = "delayed start"
+     *   - Marzban / PasarGuard:  seconds, 0 = unlimited
+     *   - some forks: microseconds, null/'' = not set
+     *
+     * Values below ~year 2100 in seconds (< 4 102 444 800) are treated as seconds,
+     * values up to ~year 2100 in milliseconds (< 4 102 444 800 000) as milliseconds,
+     * and anything larger is treated as microseconds.
+     *
+     * 0 / null / empty / negative values mean there is no absolute expiry date, so
+     * null is returned (UI renders it as "نامحدود" / unlimited).
+     *
+     * @param mixed $value
+     * @return Carbon|null
+     */
+    public static function parseExpiryValue(mixed $value): ?Carbon
+    {
+        if ($value === null || $value === '' || !is_numeric($value)) {
+            return null;
+        }
+
+        $value = (int) $value;
+
+        // 0 => unlimited / no expiry set. Negative => delayed start (3x-ui stores
+        // negative values as "N days after first use", no absolute date exists yet).
+        if ($value <= 0) {
+            return null;
+        }
+
+        // Unix seconds (before ~year 2100).
+        if ($value < 4102444800) {
+            return Carbon::createFromTimestamp($value);
+        }
+
+        // Milliseconds (typical 13-digit timestamps).
+        if ($value < 4102444800000) {
+            return Carbon::createFromTimestampMs($value);
+        }
+
+        // Microseconds (rare, but some forks report them).
+        return Carbon::createFromTimestamp((int) ($value / 1000));
+    }
+
+    /**
      * Import a subscription
      *
      * @param string $input VLESS URI or Subscription URL
@@ -221,19 +267,10 @@ class SubscriptionImportService
                 $panelUsername = $client['email'] ?? 'imported-' . substr($uuid, 0, 8);
                 $subId = $client['subId'] ?? ($details['subId'] ?? null);
 
-                // expiryTime is in milliseconds, 0 means unlimited
+                // expiryTime is in milliseconds in X-UI, 0 means unlimited. The
+                // parser also tolerates seconds/microseconds from panel forks.
                 $expiryMs = $details['expiryTime'] ?? ($client['expiryTime'] ?? 0);
-                if ($expiryMs > 0) {
-                    // Guard: some panels mistakenly return seconds instead of ms
-                    // If value looks like seconds ( < 4102444800 ~ year 2100 in seconds), convert accordingly
-                    if ($expiryMs < 4102444800) {
-                        $expiresAt = Carbon::createFromTimestamp((int) $expiryMs);
-                    } else {
-                        $expiresAt = Carbon::createFromTimestampMs((int) $expiryMs);
-                    }
-                } else {
-                    $expiresAt = null; // unlimited – keep null so UI can show "نامحدود"
-                }
+                $expiresAt = self::parseExpiryValue($expiryMs);
 
                 $totalTraffic = (int) ($details['totalGB'] ?? ($client['totalGB'] ?? 0));
                 // totalGB 0 means unlimited in XUI
@@ -264,18 +301,7 @@ class SubscriptionImportService
                 $panelUsername = $pasarguardUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
 
                 $expireTimestamp = (int) ($details['expire'] ?? ($pasarguardUser['expire'] ?? 0));
-                if ($expireTimestamp > 0) {
-                    // Handle both seconds and milliseconds (some versions return ms)
-                    if ($expireTimestamp > 4102444800000) {
-                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
-                    } elseif ($expireTimestamp > 4102444800) {
-                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
-                    } else {
-                        $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
-                    }
-                } else {
-                    $expiresAt = null; // unlimited
-                }
+                $expiresAt = self::parseExpiryValue($expireTimestamp);
 
                 $totalTraffic = (int) ($details['data_limit'] ?? ($pasarguardUser['data_limit'] ?? 0));
                 $usedTraffic = (int) ($details['used_traffic'] ?? ($pasarguardUser['used_traffic'] ?? 0));
@@ -299,17 +325,7 @@ class SubscriptionImportService
                 $panelUsername = $marzbanUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
 
                 $expireTimestamp = (int) ($details['expire'] ?? ($marzbanUser['expire'] ?? 0));
-                if ($expireTimestamp > 0) {
-                    if ($expireTimestamp > 4102444800000) {
-                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
-                    } elseif ($expireTimestamp > 4102444800) {
-                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
-                    } else {
-                        $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
-                    }
-                } else {
-                    $expiresAt = null;
-                }
+                $expiresAt = self::parseExpiryValue($expireTimestamp);
 
                 $totalTraffic = (int) ($details['data_limit'] ?? ($marzbanUser['data_limit'] ?? 0));
                 $usedTraffic = (int) ($details['used_traffic'] ?? ($marzbanUser['used_traffic'] ?? 0));
@@ -333,17 +349,23 @@ class SubscriptionImportService
             // Find matching plan based on traffic limit
             $plan = self::findMatchingPlan($totalTraffic);
 
-            // If original input was subscription URL, config_details should be that URL
-            // If VLESS URI, config_details is that VLESS URI
-            // But for better UX, use subscription_link from panel (generated) as config
-            // We'll store subscription_link as config_details for consistency with normal flow
-            // However keep original input in import_meta
+            // If original input was subscription URL, config_details should be that URL.
+            // If VLESS URI, we prefer the account's real subscription link from the
+            // panel (generated during the search) so "My Services" shows a link the
+            // user can actually import into their VPN app. The original input is
+            // always kept in import_meta for reference.
             $configDetails = $subscriptionLink ?: $originalConfig;
 
             // Ensure configDetails is not empty
             if (empty($configDetails)) {
                 $configDetails = $originalConfig;
             }
+
+            // Remember which link was saved and mark the order as freshly synced so
+            // the dashboard does not need to re-query the panel right away.
+            $importMeta['subscription_link'] = $configDetails;
+            $importMeta['original_config'] = $originalConfig;
+            $importMeta['last_synced_at'] = now()->toIso8601String();
 
             // Create order - must behave identically to normal orders
             $order = Order::create([
@@ -365,6 +387,84 @@ class SubscriptionImportService
 
             return $order;
         });
+    }
+
+    /**
+     * Re-read the live panel data for an imported order and refresh its stored
+     * traffic / expiry so the dates shown in "My Services" (web or Telegram) are
+     * always the real ones. Also heals orders imported before the expiry parsing
+     * was fixed (re-import is blocked by duplicate protection, so this is the way
+     * those stale dates get corrected).
+     *
+     * @param Order $order
+     * @return bool true when the order was successfully refreshed
+     */
+    public static function syncOrderWithPanel(Order $order): bool
+    {
+        if (!$order->is_imported || empty($order->panel_client_id)) {
+            return false;
+        }
+
+        $meta = $order->import_meta ?? [];
+
+        // Record the attempt timestamp in every outcome (success or failure) so
+        // callers can throttle re-syncs (e.g. the dashboard only retries every 24h)
+        // and an unreachable panel never slows down page loads on every request.
+        $markAttempt = function () use (&$meta, $order) {
+            $meta['last_synced_at'] = now()->toIso8601String();
+            $order->import_meta = $meta;
+            $order->save();
+        };
+
+        try {
+            $panelResult = PanelSearchService::searchByUuid($order->panel_client_id);
+            if (!$panelResult) {
+                $markAttempt();
+
+                return false;
+            }
+
+            $details = $panelResult['details'] ?? [];
+
+            if (($panelResult['type'] ?? '') === 'xui') {
+                $total = (int) ($details['totalGB'] ?? ($panelResult['client']['totalGB'] ?? 0));
+                $used = (int) ($details['traffic_used'] ?? 0);
+                $meta['totalGB'] = $total;
+                $meta['used_traffic'] = $used;
+                $meta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
+                $expiresAt = self::parseExpiryValue($details['expiryTime'] ?? ($panelResult['client']['expiryTime'] ?? 0));
+            } else {
+                // Marzban / PasarGuard
+                $total = (int) ($details['data_limit'] ?? ($panelResult['client']['data_limit'] ?? 0));
+                $used = (int) ($details['used_traffic'] ?? 0);
+                $meta['data_limit'] = $total;
+                $meta['used_traffic'] = $used;
+                $meta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
+                $expiresAt = self::parseExpiryValue($details['expire'] ?? ($panelResult['client']['expire'] ?? 0));
+            }
+
+            $order->import_meta = $meta;
+            $order->expires_at = $expiresAt;
+            $markAttempt();
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::debug('Failed to sync imported order with panel', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            try {
+                $markAttempt();
+            } catch (\Throwable $e2) {
+                Log::debug('Could not persist sync attempt timestamp', [
+                    'order_id' => $order->id,
+                    'error' => $e2->getMessage(),
+                ]);
+            }
+
+            return false;
+        }
     }
 
     protected static function findMatchingPlan(int $totalBytes): ?Plan
