@@ -224,14 +224,25 @@ class SubscriptionImportService
                 // expiryTime is in milliseconds, 0 means unlimited
                 $expiryMs = $details['expiryTime'] ?? ($client['expiryTime'] ?? 0);
                 if ($expiryMs > 0) {
-                    $expiresAt = Carbon::createFromTimestampMs($expiryMs);
+                    // Guard: some panels mistakenly return seconds instead of ms
+                    // If value looks like seconds ( < 4102444800 ~ year 2100 in seconds), convert accordingly
+                    if ($expiryMs < 4102444800) {
+                        $expiresAt = Carbon::createFromTimestamp((int) $expiryMs);
+                    } else {
+                        $expiresAt = Carbon::createFromTimestampMs((int) $expiryMs);
+                    }
                 } else {
-                    // Default to 1 year from now if unlimited, or keep null? Use 1 year for active subscription
-                    $expiresAt = now()->addYear();
+                    $expiresAt = null; // unlimited – keep null so UI can show "نامحدود"
                 }
 
-                $totalTraffic = $details['totalGB'] ?? ($client['totalGB'] ?? 0);
-                $usedTraffic = $details['traffic_used'] ?? 0;
+                $totalTraffic = (int) ($details['totalGB'] ?? ($client['totalGB'] ?? 0));
+                // totalGB 0 means unlimited in XUI
+                $usedTraffic = (int) ($details['traffic_used'] ?? 0);
+                // Also check traffic_up/down sum fallback
+                if ($usedTraffic === 0 && isset($details['traffic_up'])) {
+                    $usedTraffic = (int) ($details['traffic_up'] ?? 0) + (int) ($details['traffic_down'] ?? 0);
+                }
+                $remainingTraffic = $totalTraffic > 0 ? max(0, $totalTraffic - $usedTraffic) : null;
 
                 $importMeta = [
                     'panel_type' => 'xui',
@@ -240,58 +251,82 @@ class SubscriptionImportService
                     'subId' => $subId,
                     'totalGB' => $totalTraffic,
                     'used_traffic' => $usedTraffic,
+                    'remaining_traffic' => $remainingTraffic,
+                    'expiryTime' => $expiryMs,
                     'original_config' => $originalConfig,
                     'parsed_count' => count($parsedVlessUris),
                     'first_vless_uri' => $parsedVlessUris[0]['uri'] ?? null,
+                    'imported_at' => now()->toIso8601String(),
                 ];
             } elseif ($type === 'pasarguard') {
                 // PasarGuard is similar to Marzban
                 $pasarguardUser = $panelResult['user'] ?? $panelResult['client'];
                 $panelUsername = $pasarguardUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
 
-                $expireTimestamp = $details['expire'] ?? ($pasarguardUser['expire'] ?? 0);
+                $expireTimestamp = (int) ($details['expire'] ?? ($pasarguardUser['expire'] ?? 0));
                 if ($expireTimestamp > 0) {
-                    $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
+                    // Handle both seconds and milliseconds (some versions return ms)
+                    if ($expireTimestamp > 4102444800000) {
+                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
+                    } elseif ($expireTimestamp > 4102444800) {
+                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
+                    } else {
+                        $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
+                    }
                 } else {
-                    $expiresAt = now()->addYear();
+                    $expiresAt = null; // unlimited
                 }
 
-                $totalTraffic = $details['data_limit'] ?? ($pasarguardUser['data_limit'] ?? 0);
-                $usedTraffic = $details['used_traffic'] ?? ($pasarguardUser['used_traffic'] ?? 0);
+                $totalTraffic = (int) ($details['data_limit'] ?? ($pasarguardUser['data_limit'] ?? 0));
+                $usedTraffic = (int) ($details['used_traffic'] ?? ($pasarguardUser['used_traffic'] ?? 0));
+                $remainingTraffic = $totalTraffic > 0 ? max(0, $totalTraffic - $usedTraffic) : null;
 
                 $importMeta = [
                     'panel_type' => 'pasarguard',
                     'username' => $panelUsername,
                     'data_limit' => $totalTraffic,
                     'used_traffic' => $usedTraffic,
+                    'remaining_traffic' => $remainingTraffic,
+                    'expire' => $expireTimestamp,
                     'status' => $details['status'] ?? 'active',
                     'proxies' => $details['proxies'] ?? [],
                     'original_config' => $originalConfig,
                     'parsed_count' => count($parsedVlessUris),
+                    'imported_at' => now()->toIso8601String(),
                 ];
             } else { // marzban
                 $marzbanUser = $panelResult['user'] ?? $panelResult['client'];
                 $panelUsername = $marzbanUser['username'] ?? 'imported-' . substr($uuid, 0, 8);
 
-                $expireTimestamp = $details['expire'] ?? ($marzbanUser['expire'] ?? 0);
+                $expireTimestamp = (int) ($details['expire'] ?? ($marzbanUser['expire'] ?? 0));
                 if ($expireTimestamp > 0) {
-                    $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
+                    if ($expireTimestamp > 4102444800000) {
+                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
+                    } elseif ($expireTimestamp > 4102444800) {
+                        $expiresAt = Carbon::createFromTimestampMs($expireTimestamp);
+                    } else {
+                        $expiresAt = Carbon::createFromTimestamp($expireTimestamp);
+                    }
                 } else {
-                    $expiresAt = now()->addYear();
+                    $expiresAt = null;
                 }
 
-                $totalTraffic = $details['data_limit'] ?? ($marzbanUser['data_limit'] ?? 0);
-                $usedTraffic = $details['used_traffic'] ?? ($marzbanUser['used_traffic'] ?? 0);
+                $totalTraffic = (int) ($details['data_limit'] ?? ($marzbanUser['data_limit'] ?? 0));
+                $usedTraffic = (int) ($details['used_traffic'] ?? ($marzbanUser['used_traffic'] ?? 0));
+                $remainingTraffic = $totalTraffic > 0 ? max(0, $totalTraffic - $usedTraffic) : null;
 
                 $importMeta = [
                     'panel_type' => 'marzban',
                     'username' => $panelUsername,
                     'data_limit' => $totalTraffic,
                     'used_traffic' => $usedTraffic,
+                    'remaining_traffic' => $remainingTraffic,
+                    'expire' => $expireTimestamp,
                     'status' => $details['status'] ?? 'active',
                     'proxies' => $details['proxies'] ?? [],
                     'original_config' => $originalConfig,
                     'parsed_count' => count($parsedVlessUris),
+                    'imported_at' => now()->toIso8601String(),
                 ];
             }
 

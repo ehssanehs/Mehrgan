@@ -151,7 +151,8 @@ class PanelSearchService
             'status' => $client['enable'] ?? true ? 'active' : 'disabled',
         ];
 
-        // Try to get traffic stats
+        // Try to get traffic stats from multiple sources (different XUI versions)
+        $trafficFound = false;
         $inboundStats = $xuiService->getInboundWithClientStats($inbound['id'] ?? 0);
         if ($inboundStats && isset($inboundStats['clientStats'])) {
             foreach ($inboundStats['clientStats'] as $stat) {
@@ -159,8 +160,38 @@ class PanelSearchService
                     $details['traffic_used'] = ($stat['up'] ?? 0) + ($stat['down'] ?? 0);
                     $details['traffic_up'] = $stat['up'] ?? 0;
                     $details['traffic_down'] = $stat['down'] ?? 0;
+                    $trafficFound = true;
                     break;
                 }
+            }
+        }
+        // Fallback: try listing all inbounds and looking for clientStats there
+        if (!$trafficFound) {
+            try {
+                $allInbounds = $xuiService->getInbounds();
+                foreach ($allInbounds as $ib) {
+                    if (($ib['id'] ?? null) != ($inbound['id'] ?? null)) continue;
+                    $clientStats = $ib['clientStats'] ?? [];
+                    foreach ($clientStats as $stat) {
+                        if (($stat['email'] ?? '') === ($client['email'] ?? '')) {
+                            $details['traffic_used'] = ($stat['up'] ?? 0) + ($stat['down'] ?? 0);
+                            $details['traffic_up'] = $stat['up'] ?? 0;
+                            $details['traffic_down'] = $stat['down'] ?? 0;
+                            $trafficFound = true;
+                            break 2;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::debug('XUI fallback traffic fetch failed', ['error' => $e->getMessage()]);
+            }
+        }
+        // Also check if client itself has traffic fields (some forks store directly)
+        if (!$trafficFound) {
+            if (isset($client['up']) || isset($client['down'])) {
+                $details['traffic_used'] = ($client['up'] ?? 0) + ($client['down'] ?? 0);
+                $details['traffic_up'] = $client['up'] ?? 0;
+                $details['traffic_down'] = $client['down'] ?? 0;
             }
         }
 

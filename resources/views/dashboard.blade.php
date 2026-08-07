@@ -167,10 +167,22 @@
                                             <div>
                                                 <span class="text-xs text-gray-500">حجم</span>
                                                 <p class="font-bold text-gray-900 dark:text-white">
-                                                    @if($order->plan)
+                                                    @if($order->plan && !$order->is_imported)
                                                         {{ $order->plan->volume_gb }} GB
+                                                    @elseif($order->is_imported)
+                                                        @php
+                                                            $totalB = $order->import_meta['totalGB'] ?? $order->import_meta['data_limit'] ?? 0;
+                                                            $usedB = $order->import_meta['used_traffic'] ?? 0;
+                                                            $remB = $order->import_meta['remaining_traffic'] ?? null;
+                                                        @endphp
+                                                        @if($totalB > 0)
+                                                            {{ $remB !== null ? round($remB/1073741824,1).' / '.round($totalB/1073741824,1) : round($totalB/1073741824,1) }} GB
+                                                            @if($remB !== null)<span class="text-xs text-gray-400"> (باقی‌مانده)</span>@endif
+                                                        @else
+                                                            نامحدود @if($usedB>0)<span class="text-xs text-gray-400">({{ round($usedB/1073741824,1) }} GB مصرف)</span>@endif
+                                                        @endif
                                                     @else
-                                                        {{ isset($order->import_meta['totalGB']) ? round(($order->import_meta['totalGB']/1073741824),1).' GB' : (isset($order->import_meta['data_limit']) ? round($order->import_meta['data_limit']/1073741824,1).' GB' : '—') }}
+                                                        {{ $order->plan->volume_gb ?? '—' }} GB
                                                     @endif
                                                 </p>
                                             </div>
@@ -182,7 +194,7 @@
                                             </div>
                                             <div>
                                                 <span class="text-xs text-gray-500">تاریخ انقضا</span>
-                                                <p class="font-mono text-gray-900 dark:text-white" dir="ltr">{{ $order->expires_at ? \Carbon\Carbon::parse($order->expires_at)->format('Y-m-d') : '-' }}</p>
+                                                <p class="font-mono text-gray-900 dark:text-white" dir="ltr">{{ $order->expires_at ? \Carbon\Carbon::parse($order->expires_at)->format('Y-m-d') : 'نامحدود' }}</p>
                                             </div>
                                             <div class="text-left sm:text-right md:text-left mt-4 sm:mt-0">
                                                 <div class="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 sm:space-x-reverse">
