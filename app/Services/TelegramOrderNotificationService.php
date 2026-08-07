@@ -96,7 +96,7 @@ class TelegramOrderNotificationService
                 : '✅ خرید شما تایید و سرویس فعال شد';
 
             $planName = $plan?->name ?? 'نامشخص';
-            $expiresAt = $serviceOrder->expires_at?->format('Y/m/d H:i') ?? 'نامشخص';
+            $expiresAt = to_jalali_date($serviceOrder->expires_at, 'Y/m/d H:i', 'نامشخص');
             $username = $serviceOrder->panel_username ?: 'نامشخص';
             $serverName = $server?->name ?? 'سرور اصلی';
             $locationFlag = $location?->flag ?? '🏳️';
