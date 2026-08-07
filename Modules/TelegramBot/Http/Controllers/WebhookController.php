@@ -2892,15 +2892,35 @@ class WebhookController extends BaseController
             }
         }
     }
-    protected function sendMyServices($user, $messageId = null)
+    /**
+     * Query the orders shown in the “My Services” list.
+     *
+     * Regular services always have a plan. Imported subscriptions, however, may
+     * have plan_id = null when no active plan matched during import (e.g. no
+     * plans configured on the panel yet), so they are included explicitly –
+     * exactly like the web dashboard does. Imported subscriptions are also not
+     * hidden by the 30-day expiry window so a just-imported account is always
+     * listed.
+     */
+    protected function getMyServicesOrders(User $user)
     {
-        $orders = $user->orders()->with('plan')
+        return $user->orders()->with('plan')
             ->where('status', 'paid')
-            ->whereNotNull('plan_id')
             ->whereNull('renews_order_id')
-            ->where('expires_at', '>', now()->subDays(30))
+            ->where(function ($query) {
+                $query->whereNotNull('plan_id')->orWhere('is_imported', true);
+            })
+            ->where(function ($query) {
+                $query->where('expires_at', '>', now()->subDays(30))
+                    ->orWhere('is_imported', true);
+            })
             ->orderBy('expires_at', 'desc')
             ->get();
+    }
+
+    protected function sendMyServices($user, $messageId = null)
+    {
+        $orders = $this->getMyServicesOrders($user);
 
         if ($orders->isEmpty()) {
             $keyboard = Keyboard::make()->inline()->row([
@@ -2916,7 +2936,8 @@ class WebhookController extends BaseController
         $keyboard = Keyboard::make()->inline();
 
         foreach ($orders as $order) {
-            if (!$order->plan) {
+            // Imported subscriptions are shown even without a matching plan.
+            if (!$order->plan && !$order->is_imported) {
                 continue;
             }
 
@@ -2950,7 +2971,9 @@ class WebhookController extends BaseController
     {
         $order = $user->orders()->with('plan')->find($orderId);
 
-        if (!$order || !$order->plan || $order->status !== 'paid') {
+        // Imported subscriptions are valid services even when no plan matched
+        // during import (plan_id may be null).
+        if (!$order || $order->status !== 'paid' || (!$order->plan && !$order->is_imported)) {
             $this->sendOrEditMainMenu($user->telegram_chat_id, "❌ سرویس مورد نظر یافت نشد یا معتبر نیست.", $messageId);
             return;
         }
@@ -2977,11 +3000,28 @@ class WebhookController extends BaseController
             $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده";
         }
 
+        // Imported subscriptions may not have a matching plan; fall back to a
+        // generic label and the traffic captured at import time.
+        if ($order->plan) {
+            $planName = $order->plan->name;
+            $volumeText = $order->plan->volume_gb . ' گیگابایت';
+        } else {
+            $planName = 'اشتراک واردشده 📥';
+            $importMeta = $order->import_meta ?? [];
+            $volumeGB = null;
+            if (!empty($importMeta['totalGB']) && $importMeta['totalGB'] > 0) {
+                $volumeGB = round($importMeta['totalGB'] / 1073741824, 1);
+            } elseif (!empty($importMeta['data_limit']) && $importMeta['data_limit'] > 0) {
+                $volumeGB = round($importMeta['data_limit'] / 1073741824, 1);
+            }
+            $volumeText = $volumeGB ? $volumeGB . ' گیگابایت' : '—';
+        }
+
         $message = "🔍 جزئیات سرویس \#{$order->id}\n\n";
-        $message .= "{$statusIcon} سرویس: " . $this->escape($order->plan->name) . "\n";
+        $message .= "{$statusIcon} سرویس: " . $this->escape($planName) . "\n";
         $message .= "👤 نام کاربری: `" . $panelUsername . "`\n";
         $message .= "🗓 انقضا: " . $this->escape($expiresAt->format('Y/m/d')) . " \- " . $remainingText . "\n";
-        $message .= "📦  حجم:  " . $this->escape($order->plan->volume_gb . ' گیگابایت') . "\n";
+        $message .= "📦  حجم:  " . $this->escape($volumeText) . "\n";
         if (!empty($order->config_details)) {
             $message .= "\n🔗 *لینک اتصال \(جهت کپی\):*\n`" . $order->config_details . "`";
         } else {
@@ -2996,9 +3036,13 @@ class WebhookController extends BaseController
             ]);
         }
 
-        $keyboard->row([
-            Keyboard::inlineButton(['text' => "🔄 تمدید سرویس", 'callback_data' => "renew_order_{$order->id}"])
-        ]);
+        // Renewal requires a plan (pricing/duration), so it is only offered when
+        // the imported subscription actually matched an active plan.
+        if ($order->plan) {
+            $keyboard->row([
+                Keyboard::inlineButton(['text' => "🔄 تمدید سرویس", 'callback_data' => "renew_order_{$order->id}"])
+            ]);
+        }
 
         $keyboard->row([
             Keyboard::inlineButton(['text' => '⬅️ بازگشت به لیست سرویس‌ها', 'callback_data' => '/my_services'])
