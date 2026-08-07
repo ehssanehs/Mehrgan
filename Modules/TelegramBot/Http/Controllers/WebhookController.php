@@ -1084,10 +1084,31 @@ class WebhookController extends BaseController
         // Persian character in a VLESS remark and produce invalid UTF-8.
         $configPreview = Str::limit($configPreview, 80, '…');
 
+        $importMeta = $order->import_meta ?? [];
+        $trafficLine = null;
+        if (isset($importMeta['remaining_traffic']) && $importMeta['remaining_traffic'] !== null) {
+            $totalBytes = $importMeta['totalGB'] ?? $importMeta['data_limit'] ?? null;
+            $totalGB = ($totalBytes && $totalBytes > 0) ? round($totalBytes / 1073741824, 1) : null;
+            $remainingGB = round($importMeta['remaining_traffic'] / 1073741824, 2);
+            $usedGB = round(($importMeta['used_traffic'] ?? 0) / 1073741824, 2);
+            if ($totalGB !== null) {
+                $trafficLine = "{$remainingGB} GB باقی‌مانده از {$totalGB} GB (مصرف: {$usedGB} GB)";
+            } else {
+                $trafficLine = "نامحدود (مصرف: {$usedGB} GB)";
+            }
+        } elseif (!empty($importMeta['totalGB']) && $importMeta['totalGB'] > 0) {
+            $trafficLine = round($importMeta['totalGB'] / 1073741824, 1) . ' GB (کل)';
+        } elseif (!empty($importMeta['data_limit']) && $importMeta['data_limit'] > 0) {
+            $trafficLine = round($importMeta['data_limit'] / 1073741824, 1) . ' GB (کل)';
+        }
+
         $message = "✅ *اشتراک با موفقیت وارد شد*\n\n";
         $message .= "👤 *نام کاربری:* `{$this->escapeTelegramCode($panelUsername)}`\n";
         $message .= "🔑 *UUID:* `{$this->escapeTelegramCode($uuid)}`\n";
         $message .= "📅 *انقضا:* {$this->escape($expiresAt)}\n";
+        if ($trafficLine) {
+            $message .= "📦 *ترافیک:* {$this->escape($trafficLine)}\n";
+        }
         $message .= "🔗 *لینک:* `{$this->escapeTelegramCode($configPreview)}`\n\n";
         $message .= $this->escape("این اشتراک اکنون مانند اشتراک‌های عادی در بخش سرویس‌های من قابل مشاهده است.");
 
@@ -2983,44 +3004,132 @@ class WebhookController extends BaseController
             $panelUsername = $order->panel_username ?? \App\Services\ClientNamingService::generate($user->id, $order->id);
         }
 
-        $expiresAt = Carbon::parse($order->expires_at);
+        $expiresAt = $order->expires_at ? Carbon::parse($order->expires_at) : null;
         $now = now();
         $statusIcon = '🟢';
-
-        $daysRemaining = $now->diffInDays($expiresAt, false);
-        $daysRemaining = (int) $daysRemaining;
-
-        if ($expiresAt->isPast()) {
-            $statusIcon = '⚫️';
-            $remainingText = "*منقضی شده*";
-        } elseif ($daysRemaining <= 7) {
-            $statusIcon = '🟡';
-            $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده \(تمدید کنید\)";
-        } else {
-            $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده";
+        $remainingText = "*نامحدود*";
+        if ($expiresAt) {
+            $daysRemaining = $now->diffInDays($expiresAt, false);
+            $daysRemaining = (int) $daysRemaining;
+            if ($expiresAt->isPast()) {
+                $statusIcon = '⚫️';
+                $remainingText = "*منقضی شده*";
+            } elseif ($daysRemaining <= 7) {
+                $statusIcon = '🟡';
+                $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده \(تمدید کنید\)";
+            } else {
+                $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده";
+            }
         }
 
-        // Imported subscriptions may not have a matching plan; fall back to a
-        // generic label and the traffic captured at import time.
-        if ($order->plan) {
+        // Try to refresh live panel data for imported subscriptions so traffic/expire are always accurate
+        $liveRefreshed = false;
+        if ($order->is_imported && $order->panel_client_id) {
+            try {
+                $panelResult = \App\Services\PanelSearchService::searchByUuid($order->panel_client_id);
+                if ($panelResult) {
+                    $details = $panelResult['details'] ?? [];
+                    $liveMeta = $order->import_meta ?? [];
+                    if (($panelResult['type'] ?? '') === 'xui') {
+                        $total = $details['totalGB'] ?? ($panelResult['client']['totalGB'] ?? 0);
+                        $used = $details['traffic_used'] ?? 0;
+                        $liveMeta['totalGB'] = $total;
+                        $liveMeta['used_traffic'] = $used;
+                        $liveMeta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
+                        if (!empty($details['expiryTime']) && $details['expiryTime'] > 0) {
+                            $expMs = (int) $details['expiryTime'];
+                            $newExp = $expMs < 4102444800 ? Carbon::createFromTimestamp($expMs) : Carbon::createFromTimestampMs($expMs);
+                            if (!$order->expires_at || $order->expires_at->timestamp !== $newExp->timestamp) {
+                                $order->expires_at = $newExp;
+                                $order->save();
+                            }
+                            $expiresAt = $newExp;
+                        } elseif (($details['expiryTime'] ?? 0) == 0) {
+                            $order->expires_at = null;
+                            $order->save();
+                            $expiresAt = null;
+                        }
+                    } else {
+                        $total = $details['data_limit'] ?? 0;
+                        $used = $details['used_traffic'] ?? 0;
+                        $liveMeta['data_limit'] = $total;
+                        $liveMeta['used_traffic'] = $used;
+                        $liveMeta['remaining_traffic'] = $total > 0 ? max(0, $total - $used) : null;
+                        if (!empty($details['expire']) && $details['expire'] > 0) {
+                            $expTs = (int) $details['expire'];
+                            $newExp = $expTs > 4102444800000 ? Carbon::createFromTimestampMs($expTs) : ($expTs > 4102444800 ? Carbon::createFromTimestampMs($expTs) : Carbon::createFromTimestamp($expTs));
+                            if (!$order->expires_at || $order->expires_at->timestamp !== $newExp->timestamp) {
+                                $order->expires_at = $newExp;
+                                $order->save();
+                            }
+                            $expiresAt = $newExp;
+                        } elseif (($details['expire'] ?? 0) == 0) {
+                            $order->expires_at = null;
+                            $order->save();
+                            $expiresAt = null;
+                        }
+                    }
+                    $liveMeta['last_synced_at'] = now()->toIso8601String();
+                    $order->import_meta = $liveMeta;
+                    $order->save();
+                    $liveRefreshed = true;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::debug('Live panel refresh failed for order '.$order->id, ['error' => $e->getMessage()]);
+            }
+        }
+
+        // Recompute days remaining after possible live refresh
+        if ($expiresAt) {
+            $daysRemaining = now()->diffInDays($expiresAt, false);
+            $daysRemaining = (int) $daysRemaining;
+            if ($expiresAt->isPast()) {
+                $statusIcon = '⚫️';
+                $remainingText = "*منقضی شده*";
+            } elseif ($daysRemaining <= 7) {
+                $statusIcon = '🟡';
+                $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده \(تمدید کنید\)";
+            } else {
+                $remainingText = "*" . $this->escape($daysRemaining . ' روز') . "* باقی‌مانده";
+            }
+        } else {
+            $remainingText = "*نامحدود*";
+            $statusIcon = '🟢';
+        }
+
+        // Build traffic display – for imported show remaining/used/total from live panel data
+        if ($order->plan && !$order->is_imported) {
             $planName = $order->plan->name;
             $volumeText = $order->plan->volume_gb . ' گیگابایت';
-        } else {
-            $planName = 'اشتراک واردشده 📥';
+        } elseif ($order->is_imported) {
+            $planName = $order->plan ? $order->plan->name . ' (واردشده 📥)' : 'اشتراک واردشده 📥';
             $importMeta = $order->import_meta ?? [];
-            $volumeGB = null;
-            if (!empty($importMeta['totalGB']) && $importMeta['totalGB'] > 0) {
-                $volumeGB = round($importMeta['totalGB'] / 1073741824, 1);
-            } elseif (!empty($importMeta['data_limit']) && $importMeta['data_limit'] > 0) {
-                $volumeGB = round($importMeta['data_limit'] / 1073741824, 1);
+            $totalBytes = $importMeta['totalGB'] ?? $importMeta['data_limit'] ?? 0;
+            $usedBytes = $importMeta['used_traffic'] ?? 0;
+            $remainingBytes = $importMeta['remaining_traffic'] ?? null;
+            if ($totalBytes > 0) {
+                $totalGB = round($totalBytes / 1073741824, 1);
+                if ($remainingBytes !== null) {
+                    $remainingGB = round($remainingBytes / 1073741824, 2);
+                    $usedGB = round($usedBytes / 1073741824, 2);
+                    $volumeText = "{$remainingGB} GB باقی‌مانده از {$totalGB} GB (مصرف: {$usedGB} GB)";
+                } else {
+                    $volumeText = "{$totalGB} گیگابایت";
+                }
+            } else {
+                $usedGB = round($usedBytes / 1073741824, 2);
+                $volumeText = $usedGB > 0 ? "نامحدود (مصرف: {$usedGB} GB)" : "نامحدود ♾️";
             }
-            $volumeText = $volumeGB ? $volumeGB . ' گیگابایت' : '—';
+        } else {
+            $planName = $order->plan->name;
+            $volumeText = $order->plan->volume_gb . ' گیگابایت';
         }
 
         $message = "🔍 جزئیات سرویس \#{$order->id}\n\n";
         $message .= "{$statusIcon} سرویس: " . $this->escape($planName) . "\n";
         $message .= "👤 نام کاربری: `" . $panelUsername . "`\n";
-        $message .= "🗓 انقضا: " . $this->escape($expiresAt->format('Y/m/d')) . " \- " . $remainingText . "\n";
+        $expiresText = $expiresAt ? $this->escape($expiresAt->format('Y/m/d')) : $this->escape("نامحدود");
+        $message .= "🗓 انقضا: " . $expiresText . " \- " . $remainingText . "\n";
         $message .= "📦  حجم:  " . $this->escape($volumeText) . "\n";
         if (!empty($order->config_details)) {
             $message .= "\n🔗 *لینک اتصال \(جهت کپی\):*\n`" . $order->config_details . "`";
