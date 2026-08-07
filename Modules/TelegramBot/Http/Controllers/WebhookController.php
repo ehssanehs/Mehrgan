@@ -998,77 +998,155 @@ class WebhookController extends BaseController
 
         // Basic security: limit length
         if (strlen($input) > 10000) {
-            Telegram::sendMessage([
-                'chat_id' => $user->telegram_chat_id,
-                'text' => $this->escape("❌ ورودی بیش از حد طولانی است."),
-                'parse_mode' => 'MarkdownV2',
-                'reply_markup' => Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '🔄 تلاش مجدد', 'callback_data' => 'import_retry'])]),
-            ]);
+            $this->sendImportFailureMessage($user, 'ورودی بیش از حد طولانی است.', $messageId);
             return;
         }
 
-        Telegram::sendMessage([
-            'chat_id' => $user->telegram_chat_id,
-            'text' => $this->escape("⏳ در حال بررسی و وارد کردن اشتراک... لطفاً صبر کنید."),
-            'parse_mode' => 'MarkdownV2',
-        ]);
+        // A failure to send this progress update must not interrupt an import that can
+        // otherwise complete successfully.
+        try {
+            Telegram::sendMessage([
+                'chat_id' => $user->telegram_chat_id,
+                'text' => $this->escape("⏳ در حال بررسی و وارد کردن اشتراک... لطفاً صبر کنید."),
+                'parse_mode' => 'MarkdownV2',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Could not send Telegram import progress message.', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         try {
             $result = SubscriptionImportService::import($input, $user, 'telegram');
 
-            $user->update(['bot_state' => null]);
+            $this->clearImportState($user);
 
-            if ($result['success']) {
-                $order = $result['order'];
-                $message = "✅ *اشتراک با موفقیت وارد شد*\n\n";
-                $message .= "👤 *نام کاربری:* `{$this->escape($order->panel_username)}`\n";
-                $message .= "🔑 *UUID:* `{$order->panel_client_id}`\n";
-                $message .= "📅 *انقضا:* {$order->expires_at?->format('Y-m-d')}\n";
-                $message .= "🔗 *لینک:* `{$this->escape(substr($order->config_details,0,80))}`\n\n";
-                $message .= $this->escape("این اشتراک اکنون مانند اشتراک‌های عادی در بخش سرویس‌های من قابل مشاهده است.");
+            if ($result['success'] ?? false) {
+                $order = $result['order'] ?? null;
+                if (! $order instanceof Order) {
+                    throw new \UnexpectedValueException('Subscription import succeeded without an order.');
+                }
 
-                $keyboard = Keyboard::make()->inline()
-                    ->row([Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services'])])
-                    ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
-
-                Telegram::sendMessage([
-                    'chat_id' => $user->telegram_chat_id,
-                    'text' => $message,
-                    'parse_mode' => 'MarkdownV2',
-                    'reply_markup' => $keyboard,
-                ]);
-            } else {
-                $error = $result['error'] ?? 'خطای نامشخص';
-                $message = "❌ *خطا در وارد کردن اشتراک*\n\n";
-                $message .= $this->escape($error);
-
-                $keyboard = Keyboard::make()->inline()
-                    ->row([Keyboard::inlineButton(['text' => '🔄 تلاش مجدد', 'callback_data' => 'import_retry'])])
-                    ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
-
-                Telegram::sendMessage([
-                    'chat_id' => $user->telegram_chat_id,
-                    'text' => $message,
-                    'parse_mode' => 'MarkdownV2',
-                    'reply_markup' => $keyboard,
-                ]);
+                // Do not let MarkdownV2 formatting turn an already imported account
+                // into a misleading “system error” for the customer.
+                $this->sendImportedSubscriptionSuccessMessage($user, $order, $messageId);
+                return;
             }
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Telegram import exception', [
+
+            $this->sendImportFailureMessage($user, (string) ($result['error'] ?? 'خطای نامشخص'), $messageId);
+        } catch (\Throwable $e) {
+            Log::error('Telegram import exception', [
                 'user_id' => $user->id,
+                'exception' => $e::class,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            $user->update(['bot_state' => null]);
+            $this->clearImportState($user);
+            $this->sendImportSystemErrorMessage($user, $messageId);
+        }
+    }
 
-            Telegram::sendMessage([
-                'chat_id' => $user->telegram_chat_id,
-                'text' => $this->escape("❌ خطای سیستمی در وارد کردن اشتراک. لطفاً بعداً تلاش کنید."),
-                'parse_mode' => 'MarkdownV2',
-                'reply_markup' => Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]),
+    /**
+     * Clear the one-shot import state without masking an import result that has
+     * already been persisted successfully.
+     */
+    protected function clearImportState(User $user): void
+    {
+        try {
+            $user->update(['bot_state' => null]);
+        } catch (\Throwable $e) {
+            Log::error('Could not clear Telegram import state.', [
+                'user_id' => $user->id,
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Build a valid MarkdownV2 message for a successfully imported account.
+     *
+     * Telegram treats '-' as a reserved MarkdownV2 character. The old message
+     * inserted dates such as "2026-08-07" without escaping those hyphens, so
+     * Telegram rejected the success message and the surrounding catch block
+     * reported a false system error after the order had already been imported.
+     */
+    protected function buildImportSuccessMessage(Order $order): string
+    {
+        $panelUsername = trim((string) ($order->panel_username ?? '')) ?: '—';
+        $uuid = trim((string) ($order->panel_client_id ?? '')) ?: '—';
+        $expiresAt = $order->expires_at ? $order->expires_at->format('Y-m-d') : 'نامحدود';
+        $configPreview = trim((string) ($order->config_details ?? '')) ?: '—';
+
+        // Str::limit is multibyte-safe, unlike substr(), which could split a
+        // Persian character in a VLESS remark and produce invalid UTF-8.
+        $configPreview = Str::limit($configPreview, 80, '…');
+
+        $message = "✅ *اشتراک با موفقیت وارد شد*\n\n";
+        $message .= "👤 *نام کاربری:* `{$this->escapeTelegramCode($panelUsername)}`\n";
+        $message .= "🔑 *UUID:* `{$this->escapeTelegramCode($uuid)}`\n";
+        $message .= "📅 *انقضا:* {$this->escape($expiresAt)}\n";
+        $message .= "🔗 *لینک:* `{$this->escapeTelegramCode($configPreview)}`\n\n";
+        $message .= $this->escape("این اشتراک اکنون مانند اشتراک‌های عادی در بخش سرویس‌های من قابل مشاهده است.");
+
+        return $message;
+    }
+
+    /**
+     * Escape text inside a MarkdownV2 inline-code entity.
+     *
+     * In code entities Telegram only requires backslashes and backticks to be
+     * escaped. Escaping every Markdown character here can make configuration
+     * links difficult to read or copy.
+     */
+    protected function escapeTelegramCode(string $text): string
+    {
+        $text = str_replace('\\', '\\\\', $text);
+
+        return str_replace('`', '\\`', $text);
+    }
+
+    protected function sendImportedSubscriptionSuccessMessage(User $user, Order $order, ?int $messageId = null): void
+    {
+        $keyboard = Keyboard::make()->inline()
+            ->row([Keyboard::inlineButton(['text' => '🛠 سرویس‌های من', 'callback_data' => '/my_services'])])
+            ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+        // sendOrEditMessage has a plain-text fallback. Therefore a Telegram
+        // formatting/API problem cannot change a completed import into an error.
+        $this->sendOrEditMessage(
+            (int) $user->telegram_chat_id,
+            $this->buildImportSuccessMessage($order),
+            $keyboard,
+            $messageId,
+        );
+    }
+
+    protected function sendImportFailureMessage(User $user, string $error, ?int $messageId = null): void
+    {
+        $message = "❌ *خطا در وارد کردن اشتراک*\n\n";
+        $message .= $this->escape($error);
+
+        $keyboard = Keyboard::make()->inline()
+            ->row([Keyboard::inlineButton(['text' => '🔄 تلاش مجدد', 'callback_data' => 'import_retry'])])
+            ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+        $this->sendOrEditMessage((int) $user->telegram_chat_id, $message, $keyboard, $messageId);
+    }
+
+    protected function sendImportSystemErrorMessage(User $user, ?int $messageId = null): void
+    {
+        $keyboard = Keyboard::make()->inline()
+            ->row([Keyboard::inlineButton(['text' => '🏠 منوی اصلی', 'callback_data' => '/start'])]);
+
+        $this->sendOrEditMessage(
+            (int) $user->telegram_chat_id,
+            $this->escape("❌ خطای سیستمی در وارد کردن اشتراک. لطفاً بعداً تلاش کنید."),
+            $keyboard,
+            $messageId,
+        );
     }
 
     /**
