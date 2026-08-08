@@ -31,6 +31,28 @@ class Setting extends Model
     ];
 
     /**
+     * Normalize a scalar setting value from older JSON-encoded saves.
+     *
+     * Settings are stored in a generic text column. Older versions of the
+     * settings form encoded scalar values as JSON strings, so values such as
+     * `"marzban"`, `"13"`, and `"true"` can still be present in the
+     * database. Returning the decoded scalar keeps old installations compatible
+     * without changing JSON arrays or objects used by other settings.
+     */
+    public static function normalizeValue(mixed $value): mixed
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return $value;
+        }
+
+        $decoded = json_decode($value, true);
+
+        return json_last_error() === JSON_ERROR_NONE && is_scalar($decoded)
+            ? $decoded
+            : $value;
+    }
+
+    /**
      * Decode a setting value that is expected to contain a JSON array.
      *
      * Settings are stored in a generic text column. Some older broken saves may
