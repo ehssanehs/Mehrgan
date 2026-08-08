@@ -2180,38 +2180,10 @@ class WebhookController extends BaseController
                     ]);
                     $this->sendOrEditMainMenu($chatId, "چه کار دیگری برایتان انجام دهم?");
 
-                    $adminChatIds = getTelegramAdminChatIds($this->settings);
-                    foreach ($adminChatIds as $adminChatId) {
-                        if ($adminChatId) {
-                            $orderType = $order->renews_order_id ? 'تمدید سرویس' : ($order->plan_id ? 'خرید سرویس' : 'شارژ کیف پول');
-
-                            $adminMessage = "🧾 *رسید جدید برای سفارش \\#{$orderId}*\n\n";
-                            $adminMessage .= "*کاربر:* " . $this->escape($user->name) . " \\(ID: `{$user->id}`\\)\n";
-                            $adminMessage .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
-                            $adminMessage .= "*نوع سفارش:* " . $this->escape($orderType) . "\n\n";
-                            $adminMessage .= $this->escape("با دکمه‌های زیر می‌توانید مستقیماً از ربات تأیید یا رد کنید:");
-
-                            $adminKeyboard = Keyboard::make()->inline()
-                                ->row([
-                                    Keyboard::inlineButton([
-                                        'text' => '✅ تایید و فعال‌سازی',
-                                        'callback_data' => "admin_approve_{$orderId}"
-                                    ]),
-                                    Keyboard::inlineButton([
-                                        'text' => '❌ رد فیش',
-                                        'callback_data' => "admin_reject_{$orderId}"
-                                    ]),
-                                ]);
-
-                            Telegram::sendPhoto([
-                                'chat_id' => $adminChatId,
-                                'photo' => InputFile::create(Storage::disk('public')->path($fileName)),
-                                'caption' => $adminMessage,
-                                'parse_mode' => 'MarkdownV2',
-                                'reply_markup' => $adminKeyboard
-                            ]);
-                        }
-                    }
+                    // Sending a receipt to an administrator is an independent operation.
+                    // In particular, one stale/blocked admin chat ID must not make a receipt
+                    // that was already saved look like it failed for the customer.
+                    $this->notifyAdminsOfReceipt($order, $user);
                 } catch (\Exception $e) {
                     Log::error("Receipt processing failed for order {$orderId}: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
                     Telegram::sendMessage(['chat_id' => $chatId, 'text' => $this->escape("❌ خطا در پردازش رسید. لطفاً دوباره تلاش کنید."), 'parse_mode' => 'MarkdownV2']);
@@ -2222,6 +2194,90 @@ class WebhookController extends BaseController
                 $this->sendOrEditMainMenu($chatId, "لطفا وضعیت سفارش خود را بررسی کنید.");
             }
         }
+    }
+
+    /**
+     * Send a submitted card receipt to every configured administrator.
+     *
+     * Delivery is deliberately isolated per chat ID. Telegram returns an error
+     * for chat IDs that have not started the bot, blocked it, or are no longer
+     * valid; that must neither stop delivery to the remaining administrators
+     * nor cause the customer's successfully stored receipt to be reported as
+     * failed.
+     *
+     * @return bool True when at least one administrator received the receipt.
+     */
+    public function notifyAdminsOfReceipt(Order $order, User $user): bool
+    {
+        if ($this->settings->isEmpty()) {
+            $this->settings = Setting::all()->pluck('value', 'key')->map(
+                fn ($value) => Setting::normalizeValue($value)
+            );
+        }
+
+        $botToken = $this->settings->get('telegram_bot_token');
+        $adminChatIds = array_values(array_unique(getTelegramAdminChatIds($this->settings)));
+
+        if (empty($botToken) || empty($adminChatIds)) {
+            Log::warning('Receipt notification was not sent: Telegram bot token or admin chat ID is missing.', [
+                'order_id' => $order->id,
+                'has_bot_token' => ! empty($botToken),
+                'admin_chat_ids_count' => count($adminChatIds),
+            ]);
+            return false;
+        }
+
+        if (empty($order->card_payment_receipt) || ! Storage::disk('public')->exists($order->card_payment_receipt)) {
+            Log::error('Receipt notification was not sent: receipt file does not exist.', [
+                'order_id' => $order->id,
+                'receipt_path' => $order->card_payment_receipt,
+            ]);
+            return false;
+        }
+
+        Telegram::setAccessToken($botToken);
+
+        $orderType = $order->renews_order_id ? 'تمدید سرویس' : ($order->plan_id ? 'خرید سرویس' : 'شارژ کیف پول');
+        // HTML avoids MarkdownV2 parsing failures caused by customer names and
+        // is valid for Telegram photo captions as well as ordinary messages.
+        $caption = '<b>🧾 رسید جدید برای سفارش #' . $order->id . "</b>\n\n";
+        $caption .= '<b>کاربر:</b> ' . escapeTelegramHTML((string) $user->name) . ' (ID: <code>' . $user->id . "</code>)\n";
+        $caption .= '<b>مبلغ:</b> ' . escapeTelegramHTML(number_format((float) $order->amount) . ' تومان') . "\n";
+        $caption .= '<b>نوع سفارش:</b> ' . escapeTelegramHTML($orderType) . "\n\n";
+        $caption .= 'با دکمه‌های زیر می‌توانید مستقیماً از ربات تأیید یا رد کنید.';
+
+        $keyboard = Keyboard::make()->inline()->row([
+            Keyboard::inlineButton(['text' => '✅ تایید و فعال‌سازی', 'callback_data' => "admin_approve_{$order->id}"]),
+            Keyboard::inlineButton(['text' => '❌ رد فیش', 'callback_data' => "admin_reject_{$order->id}"]),
+        ]);
+
+        $filePath = Storage::disk('public')->path($order->card_payment_receipt);
+        $sent = false;
+
+        foreach ($adminChatIds as $adminChatId) {
+            try {
+                Telegram::sendPhoto([
+                    'chat_id' => $adminChatId,
+                    'photo' => InputFile::create($filePath),
+                    'caption' => $caption,
+                    'parse_mode' => 'HTML',
+                    'reply_markup' => $keyboard,
+                ]);
+                $sent = true;
+            } catch (\Throwable $e) {
+                Log::warning('Failed to send receipt to a Telegram administrator.', [
+                    'order_id' => $order->id,
+                    'admin_chat_id' => $adminChatId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if (! $sent) {
+            Log::error('Receipt could not be delivered to any Telegram administrator.', ['order_id' => $order->id]);
+        }
+
+        return $sent;
     }
 
     // ========================================================================
