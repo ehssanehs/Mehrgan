@@ -4816,21 +4816,31 @@ class WebhookController extends BaseController
                     throw new \Exception('خطا در لاگین به پنل X-UI.');
                 }
 
-                // گرفتن اطلاعات اینباند
+                // گرفتن اطلاعات اینباند - همیشه از API پنل استفاده کن (قابلیت اطمینان بیشتر برای اکانت تست)
                 $inboundData = null;
-                if ($targetServer) {
+                try {
                     $inbounds = $xuiService->getInbounds();
                     foreach ($inbounds as $rem) {
-                        if ($rem['id'] == $inboundId) { $inboundData = $rem; break; }
+                        if ((int)$rem['id'] === (int)$inboundId) {
+                            $inboundData = $rem;
+                            break;
+                        }
                     }
-                } else {
+                } catch (\Exception $e) {
+                    Log::warning('Failed to fetch inbounds via API for trial: ' . $e->getMessage());
+                }
+
+                // Fallback to database if API failed and no targetServer
+                if (!$inboundData && !$targetServer) {
                     $inboundModel = Inbound::whereJsonContains('inbound_data->id', (int)$inboundId)->first();
                     if ($inboundModel) {
                         $inboundData = is_string($inboundModel->inbound_data) ? json_decode($inboundModel->inbound_data, true) : $inboundModel->inbound_data;
                     }
                 }
 
-                if (!$inboundData) throw new \Exception('اینباند مورد نظر یافت نشد.');
+                if (!$inboundData) {
+                    throw new \Exception('اینباند مورد نظر یافت نشد. لطفاً inbound ID را در تنظیمات بررسی کنید.');
+                }
 
                 $clientData = [
                     'email' => $uniqueUsername,
