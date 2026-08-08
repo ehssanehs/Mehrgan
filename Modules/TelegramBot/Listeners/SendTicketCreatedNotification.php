@@ -49,8 +49,10 @@ class SendTicketCreatedNotification
             Telegram::setAccessToken($botToken);
 
             // Prepare the message for admins
+            // ⚠️ MarkdownV2: پرانتز کاراکتر رزرو شده است و باید escape شود،
+            // وگرنه تلگرام پیام را با خطای "can't parse entities" رد می‌کند.
             $message = "📝 *تیکت جدید*\n\n";
-            $message .= "*کاربر:* " . $this->escape($ticket->user->name ?? 'نامشخص') . " (ID: {$ticket->user_id})\n";
+            $message .= "*کاربر:* " . $this->escape($ticket->user->name ?? 'نامشخص') . " " . $this->escape("(ID: {$ticket->user_id})") . "\n";
             $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
             $message .= "*اولویت:* " . $this->escape(ucfirst($ticket->priority)) . "\n";
             $message .= "*تاریخ:* " . $this->escape($ticket->created_at->format('Y/m/d H:i')) . "\n\n";
@@ -122,6 +124,15 @@ class SendTicketCreatedNotification
                         Telegram::sendMessage($textPayload);
                     } catch (\Exception $e) {
                         Log::warning("Failed to send ticket created notification to admin {$adminChatId}: " . $e->getMessage());
+                        // ⚠️ Fallback: اگر پیام MarkdownV2 به هر دلیلی رد شد،
+                        // همان پیام را بدون parse_mode (متن ساده) دوباره بفرست تا
+                        // ادمین هرگز نوتیف تیکت را از دست ندهد.
+                        try {
+                            unset($textPayload['parse_mode']);
+                            Telegram::sendMessage($textPayload);
+                        } catch (\Exception $fallbackException) {
+                            Log::error("Failed to send plain-text ticket created notification to admin {$adminChatId}: " . $fallbackException->getMessage());
+                        }
                     }
                 }
             }

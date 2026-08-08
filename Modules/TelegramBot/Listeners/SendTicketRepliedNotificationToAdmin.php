@@ -58,8 +58,10 @@ class SendTicketRepliedNotificationToAdmin
             Telegram::setAccessToken($botToken);
 
             // Prepare the message for admins
-            $message = "💬 *پاسخ جدید به تیکت #{$ticket->id}*\n\n";
-            $message .= "*کاربر:* " . $this->escape($ticketOwner->name ?? 'نامشخص') . " (ID: {$ticketOwner->id})\n";
+            // ⚠️ MarkdownV2: کاراکترهای «#» و پرانتز رزرو شده‌اند و باید escape شوند،
+            // وگرنه تلگرام پیام را با خطای "can't parse entities" رد می‌کند.
+            $message = "💬 *پاسخ جدید به تیکت " . $this->escape("#{$ticket->id}") . "*\n\n";
+            $message .= "*کاربر:* " . $this->escape($ticketOwner->name ?? 'نامشخص') . " " . $this->escape("(ID: {$ticketOwner->id})") . "\n";
             $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
             $message .= "*تاریخ:* " . $this->escape($reply->created_at->format('Y/m/d H:i')) . "\n\n";
             $message .= "*متن پاسخ:*\n" . $this->escape($reply->message);
@@ -125,6 +127,15 @@ class SendTicketRepliedNotificationToAdmin
                         Telegram::sendMessage($textPayload);
                     } catch (\Exception $e) {
                         Log::warning("Failed to send ticket reply notification to admin {$adminChatId}: " . $e->getMessage());
+                        // ⚠️ Fallback: اگر پیام MarkdownV2 به هر دلیلی رد شد،
+                        // همان پیام را بدون parse_mode (متن ساده) دوباره بفرست تا
+                        // ادمین هرگز نوتیف پاسخ تیکت را از دست ندهد.
+                        try {
+                            unset($textPayload['parse_mode']);
+                            Telegram::sendMessage($textPayload);
+                        } catch (\Exception $fallbackException) {
+                            Log::error("Failed to send plain-text ticket reply notification to admin {$adminChatId}: " . $fallbackException->getMessage());
+                        }
                     }
                 }
             }

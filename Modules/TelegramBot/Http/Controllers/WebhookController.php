@@ -4276,7 +4276,7 @@ class WebhookController extends BaseController
                     default => '⚪️ نامشخص',
                 };
                 $ticketIdEscaped = $this->escape((string)$ticket->id);
-                $message .= "\n📌 *تیکت \\#{$ticketIdEscaped}* " . $this->escape(" | ") . $this->escape($status) . "\n";
+                $message .= "\n📌 *تیکت " . $this->escape("#{$ticketIdEscaped}") . "* " . $this->escape(" | ") . $this->escape($status) . "\n";
                 $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
                 $message .= "_{$this->escape($ticket->updated_at->diffForHumans())}_";
             }
@@ -5586,7 +5586,7 @@ class WebhookController extends BaseController
             $statusEmoji = $approved ? '✅' : '❌';
             $statusText = $approved ? 'تایید شد' : 'رد شد';
 
-            $caption = "🧾 *رسید سفارش \\#{$order->id}*\n\n";
+            $caption = "🧾 *رسید سفارش " . $this->escape("#{$order->id}") . "*\n\n";
             $caption .= "*کاربر:* " . $this->escape($user?->name ?? 'نامشخص') . " \\(ID: `{$order->user_id}`\\)\n";
             $caption .= "*مبلغ:* " . $this->escape(number_format($order->amount) . ' تومان') . "\n";
             $caption .= "*نوع:* " . $this->escape($orderType) . "\n";

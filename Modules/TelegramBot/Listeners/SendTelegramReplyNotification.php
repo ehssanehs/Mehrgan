@@ -68,7 +68,7 @@ class SendTelegramReplyNotification
             ]);
 
             // Prepare the message using MarkdownV2
-            $message = "📩 *پاسخ جدید به تیکت شما \\#{$ticket->id}*\n\n";
+            $message = "📩 *پاسخ جدید به تیکت شما " . $this->escape("#{$ticket->id}") . "*\n\n";
             $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
             $message .= "*پاسخ:* " . $this->escape($reply->message);
 
@@ -97,7 +97,26 @@ class SendTelegramReplyNotification
                 // Send a text-only message
                 Log::info('Sending text-only reply.');
                 $textPayload = $basePayload + ['text' => $message];
-                Telegram::sendMessage($textPayload);
+                try {
+                    Telegram::sendMessage($textPayload);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send ticket reply notification to user: ' . $e->getMessage(), [
+                        'ticket_id' => $ticket->id,
+                        'user_id'   => $ticketOwner->id,
+                    ]);
+                    // ⚠️ Fallback: اگر پیام MarkdownV2 به هر دلیلی رد شد،
+                    // همان پیام را بدون parse_mode (متن ساده) دوباره بفرست تا
+                    // کاربر هرگز پاسخ ادمین را از دست ندهد.
+                    try {
+                        unset($textPayload['parse_mode']);
+                        Telegram::sendMessage($textPayload);
+                    } catch (\Exception $fallbackException) {
+                        Log::error('Failed to send plain-text ticket reply notification to user: ' . $fallbackException->getMessage(), [
+                            'ticket_id' => $ticket->id,
+                            'user_id'   => $ticketOwner->id,
+                        ]);
+                    }
+                }
             }
 
             Log::info("Successfully queued Telegram notification for ticket #{$ticket->id}.");
