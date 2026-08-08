@@ -3349,34 +3349,21 @@ class WebhookController extends BaseController
                 'windows' => "*راهنمای ویندوز \\(V2rayN\\)*\n\n1\\. برنامه v2rayN را از [این لینک](https://github.com/2dust/v2rayN/releases) دانلود \\(فایل `v2rayN-With-Core.zip`\\) و از حالت فشرده خارج کنید\\.\n2\\. فایل `v2rayN.exe` را اجرا کنید\\.\n3\\. لینک کانفیگ را از بخش *سرویس‌های من* کپی کنید\\.\n4\\. در برنامه V2RayN، کلیدهای `Ctrl+V` را فشار دهید تا سرور اضافه شود\\.\n5\\. روی آیکون برنامه در تسک‌بار \\(کنار ساعت\\) راست کلیک کرده، از منوی `System Proxy` گزینه `Set system proxy` را انتخاب کنید تا تیک بخورد\\.\n6\\. برای اتصال، دوباره روی آیکون راست کلیک کرده و از منوی `Servers` کانفیگ اضافه شده را انتخاب کنید\\.",
             ];
             $message = $fallbackTutorials[$platform] ?? "آموزشی برای این پلتفرم یافت نشد.";
+        } else {
+            // محتوای ادمین: ابتدا به‌صورت MarkdownV2 ارسال می‌شود.
+            // اگر کاراکترهای رزرو‌شده escape نشده باشند، تلگرام خطای
+            // "can't parse entities" می‌دهد. پس ابتدا escape می‌کنیم.
+            $message = $this->escape($message);
         }
 
         $keyboard = Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '⬅️ بازگشت به آموزش‌ها', 'callback_data' => '/tutorials'])]);
 
-        $payload = [
-            'chat_id'      => $chatId,
-            'text'         => $message,
-            'parse_mode'   => 'MarkdownV2',
-            'reply_markup' => $keyboard,
-            'disable_web_page_preview' => true
-        ];
-
-        try {
-            if ($messageId) {
-                $payload['message_id'] = $messageId;
-                Telegram::editMessageText($payload);
-            } else {
-                Telegram::sendMessage($payload);
-            }
-        } catch (\Exception $e) {
-            Log::warning("Could not edit/send tutorial message: " . $e->getMessage());
-            if($messageId) {
-                unset($payload['message_id']);
-                try { Telegram::sendMessage($payload); } catch (\Exception $e2) {
-                    Log::error("Failed fallback send tutorial: " . $e2->getMessage());
-                }
-            }
-        }
+        // استفاده از sendOrEditMessage که فال‌بک متن ساده دارد:
+        // ۱) تلاش با MarkdownV2
+        // ۲) در صورت شکست، ارسال بدون parse_mode (متن ساده)
+        // این الگو در کل ربات استفاده شده و تضمین می‌کند کاربر
+        // همیشه پیام را می‌بیند.
+        $this->sendOrEditMessage((int) $chatId, $message, $keyboard, $messageId);
     }
 
     /**
