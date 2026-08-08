@@ -13,16 +13,6 @@ use Telegram\Bot\Laravel\Facades\Telegram;
 class SendTicketCreatedNotification
 {
     /**
-     * Escape text for Telegram's MarkdownV2 parse mode.
-     */
-    protected function escape(string $text): string
-    {
-        $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-        $text = str_replace('\\', '\\\\', $text);
-        return str_replace($chars, array_map(fn($char) => '\\' . $char, $chars), $text);
-    }
-
-    /**
      * Handle the event.
      */
     public function handle(TicketCreated $event): void
@@ -49,18 +39,19 @@ class SendTicketCreatedNotification
             Telegram::setAccessToken($botToken);
 
             // Prepare the message for admins
-            // ⚠️ MarkdownV2: پرانتز کاراکتر رزرو شده است و باید escape شود،
-            // وگرنه تلگرام پیام را با خطای "can't parse entities" رد می‌کند.
-            $message = "📝 *تیکت جدید*\n\n";
-            $message .= "*کاربر:* " . $this->escape($ticket->user->name ?? 'نامشخص') . " " . $this->escape("(ID: {$ticket->user_id})") . "\n";
-            $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
-            $message .= "*اولویت:* " . $this->escape(ucfirst($ticket->priority)) . "\n";
-            $message .= "*تاریخ:* " . $this->escape($ticket->created_at->format('Y/m/d H:i')) . "\n\n";
+            // ⚠️ HTML parse mode: فقط کاراکترهای «& < >» باید escape شوند؛
+            // «#» و پرانتز (که در MarkdownV2 مشکل‌ساز بودند) در HTML خطا ایجاد
+            // نمی‌کنند. محتوای کاربری با escapeTelegramHTML() ایمن می‌شود.
+            $message = "📝 <b>تیکت جدید</b>\n\n";
+            $message .= "<b>کاربر:</b> " . escapeTelegramHTML((string) ($ticket->user->name ?? 'نامشخص')) . " (ID: " . escapeTelegramHTML((string) $ticket->user_id) . ")\n";
+            $message .= "<b>موضوع:</b> " . escapeTelegramHTML((string) $ticket->subject) . "\n";
+            $message .= "<b>اولویت:</b> " . escapeTelegramHTML(ucfirst((string) $ticket->priority)) . "\n";
+            $message .= "<b>تاریخ:</b> " . escapeTelegramHTML($ticket->created_at->format('Y/m/d H:i')) . "\n\n";
 
             // Get first reply message
             $firstReply = $ticket->replies->first();
             if ($firstReply) {
-                $message .= "*متن پیام:*\n" . $this->escape($firstReply->message);
+                $message .= "<b>متن پیام:</b>\n" . escapeTelegramHTML((string) $firstReply->message);
             }
 
             // Create inline keyboard for admin actions
@@ -77,7 +68,7 @@ class SendTicketCreatedNotification
 
             $basePayload = [
                 'reply_markup' => $keyboard,
-                'parse_mode' => 'MarkdownV2',
+                'parse_mode' => 'HTML',
             ];
 
             // Send with attachment if it exists

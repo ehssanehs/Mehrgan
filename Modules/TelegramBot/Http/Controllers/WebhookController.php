@@ -4381,10 +4381,10 @@ class WebhookController extends BaseController
                     $adminChatIds = getTelegramAdminChatIds($this->settings);
                     if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
                         Telegram::setAccessToken($botToken);
-                        $adminMsg = "🧾 *" . $this->escape("تیکت جدید از ربات تلگرام") . "*\n\n";
-                        $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
-                        $adminMsg .= "*موضوع:* " . $this->escape($ticket->subject) . "\n\n";
-                        $adminMsg .= "*متن پیام:*\n" . $this->escape($messageText);
+                        $adminMsg = "🧾 <b>تیکت جدید از ربات تلگرام</b>\n\n";
+                        $adminMsg .= "<b>کاربر:</b> " . escapeTelegramHTML((string) $user->name) . " (ID: " . escapeTelegramHTML((string) $user->id) . ")\n";
+                        $adminMsg .= "<b>موضوع:</b> " . escapeTelegramHTML((string) $ticket->subject) . "\n\n";
+                        $adminMsg .= "<b>متن پیام:</b>\n" . escapeTelegramHTML((string) $messageText);
                         $adminKeyboard = Keyboard::make()->inline()->row([
                             Keyboard::inlineButton([
                                 'text' => '✉️ پاسخ به تیکت',
@@ -4400,7 +4400,7 @@ class WebhookController extends BaseController
                                 Telegram::sendMessage([
                                     'chat_id' => $adminChatId,
                                     'text' => $adminMsg,
-                                    'parse_mode' => 'MarkdownV2',
+                                    'parse_mode' => 'HTML',
                                     'reply_markup' => $adminKeyboard,
                                 ]);
                             }
@@ -4446,9 +4446,9 @@ class WebhookController extends BaseController
                     $adminChatIds = getTelegramAdminChatIds($this->settings);
                     if (!empty($adminChatIds) && ($botToken = $this->settings->get('telegram_bot_token'))) {
                         Telegram::setAccessToken($botToken);
-                        $adminMsg = "💬 *پاسخ جدید به تیکت " . $this->escape("#{$ticket->id}") . "*\n\n";
-                        $adminMsg .= "*کاربر:* " . $this->escape($user->name) . " " . $this->escape("(ID: {$user->id})") . "\n";
-                        $adminMsg .= "*متن پاسخ:*\n" . $this->escape($messageText);
+                        $adminMsg = "💬 <b>پاسخ جدید به تیکت #" . escapeTelegramHTML((string) $ticket->id) . "</b>\n\n";
+                        $adminMsg .= "<b>کاربر:</b> " . escapeTelegramHTML((string) $user->name) . " (ID: " . escapeTelegramHTML((string) $user->id) . ")\n";
+                        $adminMsg .= "<b>متن پاسخ:</b>\n" . escapeTelegramHTML((string) $messageText);
                         $adminKeyboard = Keyboard::make()->inline()->row([
                             Keyboard::inlineButton([
                                 'text' => '✉️ پاسخ به تیکت',
@@ -4464,7 +4464,7 @@ class WebhookController extends BaseController
                                 Telegram::sendMessage([
                                     'chat_id' => $adminChatId,
                                     'text' => $adminMsg,
-                                    'parse_mode' => 'MarkdownV2',
+                                    'parse_mode' => 'HTML',
                                     'reply_markup' => $adminKeyboard,
                                 ]);
                             }

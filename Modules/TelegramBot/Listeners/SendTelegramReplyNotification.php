@@ -14,16 +14,6 @@ use Telegram\Bot\Laravel\Facades\Telegram;
 class SendTelegramReplyNotification
 {
     /**
-     * Escape text for Telegram's MarkdownV2 parse mode.
-     */
-    protected function escape(string $text): string
-    {
-        $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-        $text = str_replace('\\', '\\\\', $text);
-        return str_replace($chars, array_map(fn($char) => '\\' . $char, $chars), $text);
-    }
-
-    /**
      * Handle the event.
      */
     public function handle(TicketReplied $event): void
@@ -67,15 +57,17 @@ class SendTelegramReplyNotification
                 Keyboard::inlineButton(['text' => '❌ بستن تیکت', 'callback_data' => "close_ticket_{$ticket->id}"]),
             ]);
 
-            // Prepare the message using MarkdownV2
-            $message = "📩 *پاسخ جدید به تیکت شما " . $this->escape("#{$ticket->id}") . "*\n\n";
-            $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
-            $message .= "*پاسخ:* " . $this->escape($reply->message);
+            // Prepare the message using HTML parse mode
+            // ⚠️ HTML: فقط «& < >» باید escape شوند؛ «#» دیگر مشکلی ندارد
+            // (برخلاف MarkdownV2 که کل پیام را رد می‌کرد).
+            $message = "📩 <b>پاسخ جدید به تیکت شما #" . escapeTelegramHTML((string) $ticket->id) . "</b>\n\n";
+            $message .= "<b>موضوع:</b> " . escapeTelegramHTML((string) $ticket->subject) . "\n";
+            $message .= "<b>پاسخ:</b> " . escapeTelegramHTML((string) $reply->message);
 
             $basePayload = [
                 'chat_id'      => $ticketOwner->telegram_chat_id,
                 'reply_markup' => $keyboard,
-                'parse_mode'   => 'MarkdownV2',
+                'parse_mode'   => 'HTML',
             ];
 
             // Send with attachment if it exists
