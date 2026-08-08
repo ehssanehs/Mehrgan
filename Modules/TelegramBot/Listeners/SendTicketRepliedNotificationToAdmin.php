@@ -13,16 +13,6 @@ use Telegram\Bot\Laravel\Facades\Telegram;
 class SendTicketRepliedNotificationToAdmin
 {
     /**
-     * Escape text for Telegram's MarkdownV2 parse mode.
-     */
-    protected function escape(string $text): string
-    {
-        $chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-        $text = str_replace('\\', '\\\\', $text);
-        return str_replace($chars, array_map(fn($char) => '\\' . $char, $chars), $text);
-    }
-
-    /**
      * Handle the event.
      */
     public function handle(TicketReplied $event): void
@@ -58,11 +48,14 @@ class SendTicketRepliedNotificationToAdmin
             Telegram::setAccessToken($botToken);
 
             // Prepare the message for admins
-            $message = "💬 *پاسخ جدید به تیکت #{$ticket->id}*\n\n";
-            $message .= "*کاربر:* " . $this->escape($ticketOwner->name ?? 'نامشخص') . " (ID: {$ticketOwner->id})\n";
-            $message .= "*موضوع:* " . $this->escape($ticket->subject) . "\n";
-            $message .= "*تاریخ:* " . $this->escape($reply->created_at->format('Y/m/d H:i')) . "\n\n";
-            $message .= "*متن پاسخ:*\n" . $this->escape($reply->message);
+            // ⚠️ HTML parse mode: فقط کاراکترهای «& < >» باید escape شوند؛
+            // «#» و پرانتز (که در MarkdownV2 مشکل‌ساز بودند) در HTML خطا ایجاد
+            // نمی‌کنند. محتوای کاربری با escapeTelegramHTML() ایمن می‌شود.
+            $message = "💬 <b>پاسخ جدید به تیکت #" . escapeTelegramHTML((string) $ticket->id) . "</b>\n\n";
+            $message .= "<b>کاربر:</b> " . escapeTelegramHTML((string) ($ticketOwner->name ?? 'نامشخص')) . " (ID: " . escapeTelegramHTML((string) $ticketOwner->id) . ")\n";
+            $message .= "<b>موضوع:</b> " . escapeTelegramHTML((string) $ticket->subject) . "\n";
+            $message .= "<b>تاریخ:</b> " . escapeTelegramHTML($reply->created_at->format('Y/m/d H:i')) . "\n\n";
+            $message .= "<b>متن پاسخ:</b>\n" . escapeTelegramHTML((string) $reply->message);
 
             // Create inline keyboard for admin actions
             $keyboard = Keyboard::make()->inline()->row([
@@ -78,7 +71,7 @@ class SendTicketRepliedNotificationToAdmin
 
             $basePayload = [
                 'reply_markup' => $keyboard,
-                'parse_mode' => 'MarkdownV2',
+                'parse_mode' => 'HTML',
             ];
 
             // Send with attachment if it exists
@@ -125,6 +118,15 @@ class SendTicketRepliedNotificationToAdmin
                         Telegram::sendMessage($textPayload);
                     } catch (\Exception $e) {
                         Log::warning("Failed to send ticket reply notification to admin {$adminChatId}: " . $e->getMessage());
+                        // ⚠️ Fallback: اگر پیام MarkdownV2 به هر دلیلی رد شد،
+                        // همان پیام را بدون parse_mode (متن ساده) دوباره بفرست تا
+                        // ادمین هرگز نوتیف پاسخ تیکت را از دست ندهد.
+                        try {
+                            unset($textPayload['parse_mode']);
+                            Telegram::sendMessage($textPayload);
+                        } catch (\Exception $fallbackException) {
+                            Log::error("Failed to send plain-text ticket reply notification to admin {$adminChatId}: " . $fallbackException->getMessage());
+                        }
                     }
                 }
             }
