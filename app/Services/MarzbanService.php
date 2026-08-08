@@ -146,21 +146,18 @@ class MarzbanService
                 'data_limit' => $userData['data_limit'],
             ];
 
-            if (isset($userData['proxies'])) {
-                $proxies = $userData['proxies'];
-                $temp = [];
-                foreach ((array)$proxies as $key => $val) {
-                    if (is_numeric($key)) {
-                        $temp[strtolower($val)] = new \stdClass();
-                    } else {
-                        $temp[$key] = empty($val) ? new \stdClass() : $val;
-                    }
-                }
-                $payload['proxies'] = $temp;
-            }
+            $proxies = $userData['proxies'] ?? [];
+            if (empty($proxies)) {
+                $proxies = [
+                    'shadowsocks' => new \stdClass(),
+                    'vless' => new \stdClass(),
+                    'vmess' => new \stdClass(),
+                ];
+            } 
 
-            if (isset($userData['inbounds'])) {
-                $payload['inbounds'] = $userData['inbounds'];
+            if (is_array($inbounds) && empty($inbounds)) {
+                $inbounds = new \stdClass();
+                $payload['inbounds'] = $inbounds;
             }
 
             $response = Http::withToken($this->accessToken)
