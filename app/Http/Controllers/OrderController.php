@@ -443,7 +443,20 @@ class OrderController extends Controller
         $path = $request->file('receipt')->store('receipts', 'public');
 
         // ذخیره فقط رسید (مبلغ قبلاً تنظیم شده)
-        $order->update(['card_payment_receipt' => $path]);
+        $order->update(['card_payment_receipt' => $path, 'payment_method' => 'card']);
+
+        // اطلاع‌رسانی رسیدهای ثبت‌شده از سایت نیز باید مانند رسیدهای ثبت‌شده
+        // در ربات به همه ادمین‌های تلگرام برسد. خطای یک شناسه ادمین نباید
+        // ثبت موفق رسید در سایت را مختل کند.
+        try {
+            app(\Modules\TelegramBot\Http\Controllers\WebhookController::class)
+                ->notifyAdminsOfReceipt($order->fresh(), Auth::user());
+        } catch (\Throwable $e) {
+            Log::error('Failed while starting Telegram receipt notifications for a web order.', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // بقیه کد تخفیف رو فقط اگر ثبت نشده
         if (session('discount_code') && session('discount_applied_order_id') == $order->id) {
