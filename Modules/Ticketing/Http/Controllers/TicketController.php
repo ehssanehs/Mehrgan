@@ -6,6 +6,8 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Modules\Ticketing\Models\Ticket;
+use Modules\Ticketing\Events\TicketCreated;
+use Modules\Ticketing\Events\TicketReplied;
 
 class TicketController extends Controller
 {
@@ -25,7 +27,6 @@ class TicketController extends Controller
             'priority' => 'required|in:low,medium,high',
             'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf,zip|max:5120',
         ]);
-
 
 
 
@@ -49,7 +50,10 @@ class TicketController extends Controller
             $replyData['attachment_path'] = $path;
         }
 
-        $ticket->replies()->create($replyData);
+        $reply = $ticket->replies()->create($replyData);
+
+        // Fire event for ticket creation (notifies admins via Telegram)
+        event(new TicketCreated($ticket));
 
         return redirect()->route('dashboard')->with('status', 'تیکت شما با موفقیت ارسال شد.');
     }
@@ -83,8 +87,11 @@ class TicketController extends Controller
             $replyData['attachment_path'] = $path;
         }
 
-        $ticket->replies()->create($replyData);
+        $reply = $ticket->replies()->create($replyData);
         $ticket->update(['status' => 'open']);
+
+        // Fire event for ticket reply (notifies admins via Telegram)
+        event(new TicketReplied($reply));
 
         return back()->with('status', 'پاسخ شما با موفقیت ثبت شد.');
     }
