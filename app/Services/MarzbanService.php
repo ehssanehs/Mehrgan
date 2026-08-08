@@ -94,17 +94,7 @@ class MarzbanService
                     'vless' => new \stdClass(),
                     'vmess' => new \stdClass(),
                 ];
-            } else {
-                $temp = [];
-                foreach ((array)$proxies as $key => $val) {
-                    if (is_numeric($key)) {
-                        $temp[strtolower($val)] = new \stdClass();
-                    } else {
-                        $temp[$key] = empty($val) ? new \stdClass() : $val;
-                    }
-                }
-                $proxies = $temp;
-            }
+            } 
 
             $payload = [
                 'username' => $userData['username'],
