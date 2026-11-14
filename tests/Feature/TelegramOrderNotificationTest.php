@@ -5,7 +5,6 @@ use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\User;
 use App\Services\TelegramOrderNotificationService;
-use Telegram\Bot\Laravel\Facades\Telegram;
 
 function createTelegramNotificationPlan(array $attributes = []): Plan
 {
@@ -21,19 +20,32 @@ function createTelegramNotificationPlan(array $attributes = []): Plan
     ], $attributes));
 }
 
-function mockTelegramOrderMessage(array &$payloads): void
+/**
+ * Swap the SDK's HTTP client for a recorder.
+ *
+ * Telegram's BotsManager is final, so the facade cannot be mocked; the client
+ * seam is the supported way to observe outgoing messages while the real
+ * manager and message builder still run.
+ */
+
+/**
+ * The SDK sends reply_markup either as an object or as a pre-encoded JSON
+ * string depending on the call path; normalise both for assertions.
+ */
+function replyMarkupJson(array $payload): string
 {
-    Telegram::shouldReceive('setAccessToken')
-        ->once()
-        ->with('test-bot-token');
+    $markup = $payload['reply_markup'] ?? [];
 
-    Telegram::shouldReceive('sendMessage')
-        ->once()
-        ->with(Mockery::on(function (array $payload) use (&$payloads): bool {
-            $payloads[] = $payload;
+    if (is_string($markup)) {
+        return $markup;
+    }
 
-            return true;
-        }));
+    return json_encode(is_object($markup) && method_exists($markup, 'toArray') ? $markup->toArray() : $markup);
+}
+
+function mockTelegramOrderMessage(): \Tests\Support\FakeTelegramHttpClient
+{
+    return fakeTelegram();
 }
 
 beforeEach(function () {
@@ -59,11 +71,12 @@ it('sends new connection details after a service is activated', function () {
         'expires_at' => now()->addDays(30),
     ]);
 
-    $payloads = [];
-    mockTelegramOrderMessage($payloads);
+    $telegram = mockTelegramOrderMessage();
 
     $sent = app(TelegramOrderNotificationService::class)
         ->sendServiceActivated($order);
+
+    $payloads = $telegram->payloads();
 
     expect($sent)->toBeTrue()
         ->and($payloads)->toHaveCount(1)
@@ -73,7 +86,7 @@ it('sends new connection details after a service is activated', function () {
         ->and($payloads[0]['text'])->toContain('Premium &lt;Plan&gt;')
         ->and($payloads[0]['text'])->toContain('customer_10')
         ->and($payloads[0]['text'])->toContain('security=tls&amp;type=ws')
-        ->and(json_encode($payloads[0]['reply_markup']->toArray()))->toContain("copy_link_{$order->id}");
+        ->and(replyMarkupJson($payloads[0]))->toContain("copy_link_{$order->id}");
 });
 
 it('uses the original service configuration when a renewal is accepted', function () {
@@ -101,17 +114,18 @@ it('uses the original service configuration when a renewal is accepted', functio
         'renews_order_id' => $originalOrder->id,
     ]);
 
-    $payloads = [];
-    mockTelegramOrderMessage($payloads);
+    $telegram = mockTelegramOrderMessage();
 
     $sent = app(TelegramOrderNotificationService::class)
         ->sendServiceActivated($renewalOrder);
+
+    $payloads = $telegram->payloads();
 
     expect($sent)->toBeTrue()
         ->and($payloads[0]['text'])->toContain('تمدید سرویس')
         ->and($payloads[0]['text'])->toContain($config)
         ->and($payloads[0]['text'])->toContain('renew_user')
-        ->and(json_encode($payloads[0]['reply_markup']->toArray()))->toContain("copy_link_{$originalOrder->id}");
+        ->and(replyMarkupJson($payloads[0]))->toContain("copy_link_{$originalOrder->id}");
 });
 
 it('shows the renewed plan volume and details when renewing with a different plan', function () {
@@ -150,11 +164,12 @@ it('shows the renewed plan volume and details when renewing with a different pla
         'renews_order_id' => $originalOrder->id,
     ]);
 
-    $payloads = [];
-    mockTelegramOrderMessage($payloads);
+    $telegram = mockTelegramOrderMessage();
 
     $sent = app(TelegramOrderNotificationService::class)
         ->sendServiceActivated($renewalOrder);
+
+    $payloads = $telegram->payloads();
 
     expect($sent)->toBeTrue()
         ->and($payloads[0]['text'])->toContain('تمدید سرویس')
@@ -177,11 +192,12 @@ it('sends the admin rejection reason to the user safely', function () {
         'payment_method' => 'card',
     ]);
 
-    $payloads = [];
-    mockTelegramOrderMessage($payloads);
+    $telegram = mockTelegramOrderMessage();
 
     $sent = app(TelegramOrderNotificationService::class)
         ->sendPaymentRejected($order, 'مبلغ <کمتر> است & رسید ناخوانا است.');
+
+    $payloads = $telegram->payloads();
 
     expect($sent)->toBeTrue()
         ->and($payloads[0]['parse_mode'])->toBe('HTML')
@@ -189,5 +205,5 @@ it('sends the admin rejection reason to the user safely', function () {
         ->and($payloads[0]['text'])->toContain('خرید سرویس')
         ->and($payloads[0]['text'])->toContain('Monthly &amp; Fast')
         ->and($payloads[0]['text'])->toContain('مبلغ &lt;کمتر&gt; است &amp; رسید ناخوانا است.')
-        ->and(json_encode($payloads[0]['reply_markup']->toArray()))->toContain('/support_new');
+        ->and(replyMarkupJson($payloads[0]))->toContain('/support_new');
 });
