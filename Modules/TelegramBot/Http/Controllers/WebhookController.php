@@ -2772,12 +2772,20 @@ class WebhookController extends BaseController
         $card = \App\Models\Setting::getRandomPaymentCard();
         $cardNumber = $card['card_number'];
         $cardHolder = $card['card_holder'];
+        $cardInstructions = trim((string) ($card['instructions'] ?? ''));
         $amountToPay = number_format($order->amount);
 
         $message = "💳 *پرداخت کارت به کارت*\n\n";
         $message .= "لطفاً مبلغ *" . $this->escape($amountToPay) . " تومان* را به حساب زیر واریز نمایید:\n\n";
         $message .= "👤 *به نام:* " . $this->escape($cardHolder) . "\n";
         $message .= "💳 *شماره کارت:*\n`" . $this->escape($cardNumber) . "`\n\n";
+
+        // Admin-configured payment instructions ("توضیحات اضافی" in the payment
+        // settings) must reach the customer in the bot as well as on the site.
+        if ($cardInstructions !== '') {
+            $message .= "📝 " . $this->escape($cardInstructions) . "\n\n";
+        }
+
         $message .= "🔔 *مهم:* پس از واریز، *فقط عکس رسید* را در همین چت ارسال کنید\\.";
 
         $keyboard = Keyboard::make()->inline()->row([Keyboard::inlineButton(['text' => '❌ انصراف از پرداخت', 'callback_data' => '/cancel_action'])]);
