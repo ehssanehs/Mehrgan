@@ -102,6 +102,15 @@ class Setting extends Model
     {
         $settings = static::all()->pluck('value', 'key');
 
+        // The shared instructions text is shown to the customer next to the card
+        // details (web page and Telegram bot). Older saves may have stored it
+        // JSON-encoded, so normalize it here instead of showing the raw quotes.
+        $instructions = static::normalizeValue($settings->get('payment_card_instructions', ''));
+        if (!is_scalar($instructions)) {
+            $instructions = '';
+        }
+        $instructions = (string) $instructions;
+
         // New format: payment_cards is a JSON array of {card_number, card_holder}
         $cards = $settings->get('payment_cards');
 
@@ -115,7 +124,7 @@ class Setting extends Model
                 return [
                     'card_number'  => $random['card_number'] ?? '---- ---- ---- ----',
                     'card_holder'  => $random['card_holder'] ?? 'ثبت نشده',
-                    'instructions' => $settings->get('payment_card_instructions', ''),
+                    'instructions' => $instructions,
                 ];
             }
         }
@@ -124,7 +133,7 @@ class Setting extends Model
         return [
             'card_number'  => $settings->get('payment_card_number', '---- ---- ---- ----'),
             'card_holder'  => $settings->get('payment_card_holder_name', 'ثبت نشده'),
-            'instructions' => $settings->get('payment_card_instructions', ''),
+            'instructions' => $instructions,
         ];
     }
 

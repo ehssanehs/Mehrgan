@@ -49,6 +49,14 @@
                     </div>
                 </div>
 
+                {{-- توضیحات پرداخت (تنظیمات پنل مدیریت) --}}
+                @if (!empty(trim((string) $cardInstructions)))
+                    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm leading-7 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                        <p class="mb-2 font-semibold">📝 توضیحات پرداخت</p>
+                        <p class="whitespace-pre-line">{{ $cardInstructions }}</p>
+                    </div>
+                @endif
+
                 {{-- بخش آپلود رسید --}}
                 <div x-data="{ fileName: '' }">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
