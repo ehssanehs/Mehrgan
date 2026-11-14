@@ -162,21 +162,75 @@ class SiteTheme
      * each hex value into a full 50-950 shade scale automatically
      * (see \Filament\Support\Colors\Color::hex()).
      *
+     * A single dark hex value (the old behaviour) produced a scale whose
+     * mid-tones — gray-400/500, used by Filament for secondary text such as
+     * sidebar group headings, stat labels and the user menu — were nearly the
+     * same colour as the panel background (contrast ≈ 2.8:1). Dark themes
+     * therefore get an explicit scale: readable text tones plus surfaces that
+     * keep the theme tint.
+     *
      * @return array<string, string|array<int, string>>
      */
-    public static function filamentColors(): array
+    public static function filamentColors(?string $theme = null): array
     {
-        $palette = static::palette();
+        $palette = static::palette($theme);
 
         $colors = [
             'primary' => $palette['admin_primary'],
         ];
 
-        // Dark themes get a gray scale tinted toward their background so the
-        // panel surfaces feel cohesive. Light themes keep a neutral gray.
-        $colors['gray'] = $palette['admin_gray'] ?? \Filament\Support\Colors\Color::Slate;
+        // Light themes keep a neutral gray scale.
+        if ($palette['admin_gray'] === null) {
+            $colors['gray'] = \Filament\Support\Colors\Color::Slate;
+
+            return $colors;
+        }
+
+        $surface = $palette['admin_gray'];
+
+        $colors['gray'] = [
+            // Text tones: readable on the near-black surfaces of every dark theme.
+            50 => '#f8fafc',
+            100 => '#f1f5f9',
+            200 => '#e2e8f0',
+            300 => '#cbd5e1',
+            400 => '#aab2c0', // secondary text (was ≈ #535662)
+            500 => '#8d95a3', // muted text / labels
+            600 => '#5d6473', // icons, disabled text
+            // Surfaces: derived from the theme tint so the panel stays cohesive.
+            700 => static::mix($surface, '#ffffff', 0.14),
+            800 => static::mix($surface, '#ffffff', 0.07),
+            900 => $surface,
+            950 => $palette['bg'],
+        ];
 
         return $colors;
+    }
+
+    /**
+     * Blend two hex colours.
+     *
+     * @param string $from Base colour (e.g. #090e1f)
+     * @param string $to   Colour to mix in (e.g. #ffffff)
+     * @param float  $ratio 0 = $from, 1 = $to
+     */
+    protected static function mix(string $from, string $to, float $ratio): string
+    {
+        $parse = static function (string $hex): array {
+            $hex = ltrim($hex, '#');
+            if (strlen($hex) === 3) {
+                $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+            }
+
+            return [hexdec(substr($hex, 0, 2)), hexdec(substr($hex, 2, 2)), hexdec(substr($hex, 4, 2))];
+        };
+
+        [$fr, $fg, $fb] = $parse($from);
+        [$tr, $tg, $tb] = $parse($to);
+
+        $channel = static fn (int $a, int $b): int => (int) round($a + ($b - $a) * $ratio);
+
+        return sprintf('#%02x%02x%02x', $channel($fr, $tr), $channel($fg, $tg), $channel($fb, $tb));
     }
 
     /**
