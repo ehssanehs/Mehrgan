@@ -44,9 +44,10 @@ it('escapes the imported subscription expiration date for Telegram MarkdownV2', 
     $method->setAccessible(true);
     $message = $method->invoke($controller, $order);
 
-    // A raw 2026-08-07 makes Telegram reject a MarkdownV2 message because
-    // hyphens are reserved characters. The result must contain escaped hyphens.
-    expect($message)->toContain('2026\\-08\\-07');
+    // The customer-facing date is Jalali (Y/m/d), so the old Gregorian
+    // expectation no longer applies. What matters is that the rendered date
+    // matches the formatter and that no raw Gregorian date leaks through.
+    expect($message)->toContain(to_jalali_date($order->expires_at, 'Y/m/d'));
     expect($message)->not->toContain('2026-08-07');
     expect(mb_check_encoding($message, 'UTF-8'))->toBeTrue();
 });
@@ -217,7 +218,7 @@ it('still lists regular paid services with a plan', function () {
 });
 
 it('shows details of an imported subscription without a plan', function () {
-    $user = User::factory()->create();
+    $user = User::factory()->create(['telegram_chat_id' => '123456789']);
 
     $imported = Order::create([
         'user_id' => $user->id,
@@ -233,18 +234,47 @@ it('shows details of an imported subscription without a plan', function () {
         'import_meta' => ['panel_type' => 'xui', 'totalGB' => 53687091200], // 50 GB
     ]);
 
-    \Telegram\Bot\Laravel\Facades\Telegram::shouldReceive('sendMessage')
-        ->once()
-        ->with(\Mockery::on(function ($payload) {
-            $text = $payload['text'] ?? '';
-            return str_contains($text, 'اشتراک واردشده')
-                && str_contains($text, 'imported-user')
-                && str_contains($text, '50 گیگابایت');
-        }))
-        ->andReturn(true);
+    $telegram = fakeTelegram();
 
     $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
     $method = (new ReflectionClass($controller))->getMethod('showServiceDetails');
     $method->setAccessible(true);
     $method->invoke($controller, $user, $imported->id);
+
+    $messages = $telegram->payloadsFor('sendMessage');
+
+    expect($messages)->toHaveCount(1);
+    expect($messages[0]['text'] ?? '')
+        ->toContain('اشتراک واردشده')
+        ->toContain('imported-user')
+        ->toContain('50 گیگابایت');
+});
+
+it('does not blow up when the user has no telegram chat id', function () {
+    $user = User::factory()->create(['telegram_chat_id' => null]);
+
+    $imported = Order::create([
+        'user_id' => $user->id,
+        'plan_id' => null,
+        'status' => 'paid',
+        'source' => 'telegram',
+        'payment_method' => 'imported',
+        'config_details' => 'vless://ffffffff-ffff-4fff-8fff-ffffffffffff@example.com:443#Imported',
+        'expires_at' => now()->addYear(),
+        'panel_username' => 'no-chat-user',
+        'panel_client_id' => 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        'is_imported' => true,
+        'import_meta' => ['panel_type' => 'xui', 'totalGB' => 53687091200],
+    ]);
+
+    $telegram = fakeTelegram();
+
+    $controller = new \Modules\TelegramBot\Http\Controllers\WebhookController();
+    $method = (new ReflectionClass($controller))->getMethod('showServiceDetails');
+    $method->setAccessible(true);
+
+    // A missing chat id must be skipped, not turned into a TypeError/500.
+    $method->invoke($controller, $user, $imported->id);
+
+    expect($telegram->payloadsFor('sendMessage'))->toHaveCount(0);
 });

@@ -55,14 +55,28 @@ class SetTelegramWebhook extends Command
 
         // ۴. ساخت URL وب‌هوک
         $webhookUrl = rtrim($appUrl, '/') . '/webhooks/telegram';
-        $telegramApiUrl = "https://api.telegram.org/bot{$botToken}/setWebhook?url={$webhookUrl}";
+
+        // Telegram signs each update with this secret so the webhook can tell a
+        // real update from a forged POST. Keep the existing value on re-runs so
+        // the bot does not drop updates in flight.
+        $secret = Setting::where('key', 'telegram_webhook_secret')->value('value');
+
+        if (!$secret) {
+            $secret = \Illuminate\Support\Str::random(48);
+            Setting::updateOrCreate(['key' => 'telegram_webhook_secret'], ['value' => $secret]);
+            \Illuminate\Support\Facades\Cache::forget('settings');
+        }
 
         $this->line("Setting webhook to: " . $webhookUrl);
         Log::info("Attempting to set webhook to: " . $webhookUrl);
 
         // ۵. ارسال درخواست به تلگرام
         try {
-            $response = Http::get($telegramApiUrl);
+            $response = Http::asForm()->post("https://api.telegram.org/bot{$botToken}/setWebhook", [
+                'url' => $webhookUrl,
+                'secret_token' => $secret,
+                'drop_pending_updates' => false,
+            ]);
 
             if ($response->successful() && $response->json('ok') === true) {
                 $successMessage = '✅ Webhook set successfully! Description: ' . $response->json('description');

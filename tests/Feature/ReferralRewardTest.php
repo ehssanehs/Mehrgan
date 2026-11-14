@@ -6,7 +6,6 @@ use App\Models\Plan;
 use App\Models\Setting;
 use App\Models\Transaction;
 use App\Models\User;
-use Telegram\Bot\Laravel\Facades\Telegram;
 
 it('credits and notifies the referrer when a referred user completes a paid order', function () {
     Setting::insert([
@@ -36,17 +35,17 @@ it('credits and notifies the referrer when a referred user completes a paid orde
         'payment_method' => 'wallet',
     ]);
 
-    Telegram::shouldReceive('setAccessToken')
-        ->once()
-        ->with('test-bot-token');
-    Telegram::shouldReceive('sendMessage')
-        ->once()
-        ->with(Mockery::on(fn (array $payload) => $payload['chat_id'] === '123456789'
-            && str_contains($payload['text'], '15,000')));
+    $telegram = fakeTelegram();
 
     OrderPaid::dispatch($order);
 
-    expect($referrer->fresh()->balance)->toBe(35000)
+    $messages = $telegram->payloadsFor('sendMessage');
+
+    expect($messages)->toHaveCount(1)
+        ->and((string) $messages[0]['chat_id'])->toBe('123456789')
+        ->and($messages[0]['text'])->toContain('15,000');
+
+    expect((float) $referrer->fresh()->balance)->toBe(35000.0)
         ->and(Transaction::where('user_id', $referrer->id)
             ->where('order_id', $order->id)
             ->where('metadata->referral_reward', true)

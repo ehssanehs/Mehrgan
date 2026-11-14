@@ -16,6 +16,16 @@ pest()->extend(Tests\TestCase::class)
     ->in('Feature');
 
 /*
+ * Unit tests here still touch Eloquent models and the container (config(),
+ * DB::transaction()), so they need the Laravel test case as well. Without this
+ * binding they run on PHPUnit's TestCase and blow up with
+ * "Target class [config] does not exist".
+ */
+pest()->extend(Tests\TestCase::class)
+    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    ->in('Unit');
+
+/*
 |--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
@@ -44,4 +54,20 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Route Telegram traffic to a recorder instead of the network.
+ *
+ * The SDK resolves BotsManager as a singleton built from config('telegram'),
+ * so the fake has to be installed before the first bot call in a test.
+ */
+function fakeTelegram(): \Tests\Support\FakeTelegramHttpClient
+{
+    $fake = new \Tests\Support\FakeTelegramHttpClient();
+
+    config(['telegram.http_client_handler' => $fake]);
+    app()->forgetInstance(\Telegram\Bot\BotsManager::class);
+
+    return $fake;
 }

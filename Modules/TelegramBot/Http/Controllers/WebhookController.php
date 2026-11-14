@@ -327,6 +327,22 @@ class WebhookController extends BaseController
                 Log::warning('Telegram bot token is not set.');
                 return response('ok', 200);
             }
+
+            // Telegram signs every update with the secret_token registered by
+            // setWebhook. Without this check anybody could POST a crafted
+            // update — including an "admin" callback_query — and the bot would
+            // act on it. `php artisan telegram:set-webhook` registers it.
+            $expectedSecret = (string) $this->settings->get('telegram_webhook_secret');
+            $providedSecret = (string) $request->header('X-Telegram-Bot-Api-Secret-Token', '');
+
+            if ($expectedSecret === '' || !hash_equals($expectedSecret, $providedSecret)) {
+                Log::warning('Telegram webhook rejected: secret token mismatch. Run `php artisan telegram:set-webhook` to register the secret.', [
+                    'ip' => $request->ip(),
+                ]);
+
+                return response('forbidden', 403);
+            }
+
             Telegram::setAccessToken($botToken);
             $update = Telegram::getWebhookUpdate();
 
@@ -5884,8 +5900,19 @@ class WebhookController extends BaseController
         }
     }
 
-    protected function sendOrEditMessage(int $chatId, string $text, $keyboard, ?int $messageId = null)
+    protected function sendOrEditMessage(int|string|null $chatId, string $text, $keyboard, ?int $messageId = null)
     {
+        // A user without a Telegram chat id (e.g. an imported subscription that
+        // was never linked to the bot) used to raise a TypeError here, which
+        // turned the whole webhook into a 500.
+        if ($chatId === null || $chatId === '') {
+            Log::warning('Skipped Telegram message: user has no chat id.', ['message_id' => $messageId]);
+
+            return;
+        }
+
+        $chatId = (int) $chatId;
+
         $payload = [
             'chat_id'      => $chatId,
             'text'         => $text,
