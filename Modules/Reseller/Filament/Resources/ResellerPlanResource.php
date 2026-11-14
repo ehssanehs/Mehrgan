@@ -14,7 +14,8 @@ class ResellerPlanResource extends Resource
 {
     protected static ?string $model = ResellerPlan::class;
 
-    protected static ?string $navigationGroup = 'مدیریت نمایندگی';
+    protected static ?string $navigationGroup = 'نمایندگی';
+    protected static ?int $navigationSort = 30;
 
     protected static ?string $navigationLabel = 'پلن‌های نمایندگی';
 

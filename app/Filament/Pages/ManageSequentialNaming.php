@@ -20,7 +20,8 @@ class ManageSequentialNaming extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationGroup = 'مدیریت کاربران';
+    protected static ?string $navigationGroup = 'تنظیمات';
+    protected static ?int $navigationSort = 40;
     protected static ?string $navigationIcon = 'heroicon-o-numbered-list';
     protected static ?string $navigationLabel = 'تنظیمات نام‌گذاری ترتیبی';
     protected static string $view = 'filament.pages.manage-sequential-naming';

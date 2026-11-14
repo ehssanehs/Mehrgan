@@ -17,7 +17,8 @@ class TelegramBroadcastResource extends Resource
 {
     protected static ?string $model = \App\Models\User::class; // فقط برای نمایش یک صفحه خالی
     protected static ?string $navigationIcon = 'heroicon-o-megaphone'; // آیکون بلندگو
-    protected static ?string $navigationGroup = 'مدیریت کاربران';
+    protected static ?string $navigationGroup = 'محتوا';
+    protected static ?int $navigationSort = 40;
     protected static ?string $navigationLabel = 'پیام همگانی تلگرام';
     protected static ?string $pluralModelLabel = 'پیام همگانی تلگرام';
     protected static ?string $modelLabel = 'پیام همگانی';

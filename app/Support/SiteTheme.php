@@ -35,20 +35,6 @@ class SiteTheme
      *                   null keeps the default Filament gray palette.
      */
     protected const PALETTES = [
-        'welcome' => [
-            'dark' => true,
-            'bg' => '#121212',
-            'accent' => '#4ade80',
-            'admin_primary' => '#059669',
-            'admin_gray' => '#1e293b',
-        ],
-        'rocket' => [
-            'dark' => true,
-            'bg' => '#0b0b12',
-            'accent' => '#ff3c00',
-            'admin_primary' => '#ea580c',
-            'admin_gray' => '#14141e',
-        ],
         'arcane' => [
             'dark' => true,
             'bg' => '#020412',
@@ -56,47 +42,12 @@ class SiteTheme
             'admin_primary' => '#0d9488',
             'admin_gray' => '#090e1f',
         ],
-        'cyberpunk' => [
-            'dark' => true,
-            'bg' => '#0a0a1a',
-            'accent' => '#00f6ff',
-            'admin_primary' => '#c026d3',
-            'admin_gray' => '#0f0f23',
-        ],
-        'dragon' => [
-            'dark' => true,
-            'bg' => '#100505',
-            'accent' => '#e6b800',
-            'admin_primary' => '#b45309',
-            'admin_gray' => '#1e0a0a',
-        ],
-        'phoenix' => [
-            'dark' => true,
-            'bg' => '#0a0a0a',
-            'accent' => '#ffd700',
-            'admin_primary' => '#ea5800',
-            'admin_gray' => '#1e0f05',
-        ],
-        'nebula' => [
-            'dark' => true,
-            'bg' => '#03030a',
-            'accent' => '#8b5cf6',
-            'admin_primary' => '#7c3aed',
-            'admin_gray' => '#0a061e',
-        ],
         'aurora' => [
             'dark' => false,
             'bg' => '#f8f9fb',
             'accent' => '#0ea5e9',
             'admin_primary' => '#0284c7',
             'admin_gray' => null,
-        ],
-        'obsidian' => [
-            'dark' => true,
-            'bg' => '#060608',
-            'accent' => '#e6b84d',
-            'admin_primary' => '#b45309',
-            'admin_gray' => '#0f0f18',
         ],
     ];
 
@@ -175,11 +126,28 @@ class SiteTheme
     {
         $palette = static::palette($theme);
 
+        // 600 is the stop Filament uses for button backgrounds and for primary
+        // text in light mode. The stock ramp derived from a 500-level accent is
+        // too bright for white labels, so we darken that stop explicitly.
         $colors = [
-            'primary' => $palette['admin_primary'],
+            'primary' => static::readableRamp(
+                $palette['admin_primary'],
+                $palette['admin_primary'],
+                static::mix($palette['admin_primary'], '#000000', 0.35),
+            ),
         ];
 
-        // Light themes keep a neutral gray scale.
+        // Semantic colours get explicit 400/600 stops. Filament prints status
+        // text with the 400 shade in dark mode and the 600 shade in light mode,
+        // and the stock 600 shades (emerald-600, sky-600, ...) sit below 4.5:1
+        // on white. These pairs stay readable on both backgrounds.
+        $colors['success'] = static::readableRamp('#10b981', '#34d399', '#047857');
+        $colors['info']    = static::readableRamp('#0ea5e9', '#38bdf8', '#0369a1');
+        $colors['warning'] = static::readableRamp('#f59e0b', '#fbbf24', '#b45309');
+        $colors['danger']  = static::readableRamp('#ef4444', '#f87171', '#b91c1c');
+
+        // Light themes keep a neutral gray scale and a slightly deeper primary
+        // so headings and links clear 4.5:1 on white.
         if ($palette['admin_gray'] === null) {
             $colors['gray'] = \Filament\Support\Colors\Color::Slate;
 
@@ -205,6 +173,35 @@ class SiteTheme
         ];
 
         return $colors;
+    }
+
+
+    /**
+     * Build a full Filament colour ramp and override the two stops that carry
+     * text: 400 (dark mode) and 600 (light mode).
+     */
+    protected static function readableRamp(string $base, string $darkText, string $lightText): array
+    {
+        $ramp = \Filament\Support\Colors\Color::hex($base);
+
+        $ramp[400] = static::rgbTriplet($darkText);
+        // Filament paints button backgrounds with the 500 stop in dark mode and
+        // the 600 stop in light mode; both need enough depth for white labels.
+        $ramp[500] = static::rgbTriplet(static::mix($lightText, '#000000', 0.12));
+        $ramp[600] = static::rgbTriplet($lightText);
+
+        return $ramp;
+    }
+
+    protected static function rgbTriplet(string $hex): string
+    {
+        $hex = ltrim($hex, '#');
+
+        return implode(', ', [
+            hexdec(substr($hex, 0, 2)),
+            hexdec(substr($hex, 2, 2)),
+            hexdec(substr($hex, 4, 2)),
+        ]);
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Widgets\MehrganInfoWidget;
 use App\Support\SiteTheme;
 use Filament\Http\Middleware\Authenticate;
+use Filament\Navigation\NavigationGroup;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages;
@@ -60,6 +61,18 @@ class AdminPanelProvider extends PanelProvider
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
                 Pages\Dashboard::class,
+            ])
+            // Explicit order + icons for the sidebar. Grouping is intentionally
+            // shallow (six areas) so every setting has exactly one obvious home.
+            ->navigationGroups([
+                // No group icons: Filament forbids icons on both a group and
+                // its items, and per-item icons are more useful for scanning.
+                NavigationGroup::make('فروش'),
+                NavigationGroup::make('کاربران'),
+                NavigationGroup::make('نمایندگی'),
+                NavigationGroup::make('سرورها'),
+                NavigationGroup::make('محتوا'),
+                NavigationGroup::make('تنظیمات')->collapsed(),
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([

@@ -19,7 +19,8 @@ class TicketResource extends Resource
     protected static ?string $navigationLabel = 'تیکت‌های پشتیبانی';
     protected static ?string $modelLabel = 'تیکت';
     protected static ?string $pluralModelLabel = 'تیکت‌ها';
-    protected static ?string $navigationGroup = 'مدیریت کاربران';
+    protected static ?string $navigationGroup = 'کاربران';
+    protected static ?int $navigationSort = 20;
 
     public static function canViewAny(): bool
     {

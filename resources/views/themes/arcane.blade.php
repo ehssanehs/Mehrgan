@@ -15,6 +15,11 @@
         <nav class="navbar navbar-expand-lg navbar-dark fixed-top py-3 navbar-glass">
             <div class="container">
                 <a class="navbar-brand fw-bold" href="#">{{ $settings->get('arcane_navbar_brand') ?: 'ARCANE' }}</a>
+                <div class="d-none d-lg-flex align-items-center gap-4 ms-4 small fw-semibold">
+                    <a href="#features" class="site-nav-link text-decoration-none">ویژگی‌ها</a>
+                    <a href="#pricing" class="site-nav-link text-decoration-none">پلن‌ها</a>
+                    <a href="#faq" class="site-nav-link text-decoration-none">سوالات متداول</a>
+                </div>
                 <a href="{{ auth()->check() ? route('filament.admin.pages.dashboard') : route('login') }}" class="btn btn-outline-info btn-sm">{{ auth()->check() ? 'پنل کاربری' : 'ورود / ثبت‌نام' }}</a>
             </div>
         </nav>
@@ -134,7 +139,7 @@
                 <p class="mb-2 text-secondary small">{{ $settings->get('arcane_footer_text') ?: '© 2025 Arcane Networks' }}</p>
                 <p class="mb-0 text-muted small" style="opacity: 0.7;">
                     طراحی و توسعه توسط
-                    <a href="https://t.me/Mehrgan_OfficialSupport" target="_blank" rel="noopener noreferrer" class="fw-bold text-decoration-none" style="color: var(--text-secondary, #adb5bd);">
+                    <a href="https://t.me/Mehrgan_OfficialSupport" target="_blank" rel="noopener noreferrer" class="fw-bold text-decoration-none">
                         Mehrgan
                     </a>
                 </p>

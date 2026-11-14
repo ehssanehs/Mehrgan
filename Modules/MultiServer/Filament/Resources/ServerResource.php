@@ -16,7 +16,9 @@ class ServerResource extends Resource
 {
     protected static ?string $model = Server::class;
     protected static ?string $navigationIcon = 'heroicon-o-server';
-    protected static ?string $navigationGroup = 'مولتی سرور';
+    protected static ?string $navigationGroup = 'سرورها';
+    protected static ?string $navigationLabel = 'سرورها';
+    protected static ?int $navigationSort = 20;
     protected static ?string $label = 'سرور';
     protected static ?string $pluralLabel = 'سرورها';
 

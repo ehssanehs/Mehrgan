@@ -16,7 +16,8 @@ class VpnServerResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-server';
 
-    protected static ?string $navigationGroup = 'مدیریت نمایندگی';
+    protected static ?string $navigationGroup = 'نمایندگی';
+    protected static ?int $navigationSort = 50;
 
     protected static ?string $navigationLabel = 'سرورهای VPN';
 

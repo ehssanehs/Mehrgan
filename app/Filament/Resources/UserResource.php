@@ -24,7 +24,8 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
-    protected static ?string $navigationGroup = 'مدیریت کاربران';
+    protected static ?string $navigationGroup = 'کاربران';
+    protected static ?int $navigationSort = 10;
     protected static ?string $navigationLabel = 'کاربران سایت';
     protected static ?string $pluralModelLabel = 'کاربران سایت';
     protected static ?string $modelLabel = 'کاربر';

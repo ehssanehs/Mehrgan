@@ -22,7 +22,8 @@ class ResellerRequestResource extends Resource
 {
     protected static ?string $model = ResellerRequest::class;
 
-    protected static ?string $navigationGroup = 'مدیریت نمایندگی';
+    protected static ?string $navigationGroup = 'نمایندگی';
+    protected static ?int $navigationSort = 20;
 
     protected static ?string $navigationLabel = 'درخواست‌های نمایندگی';
 

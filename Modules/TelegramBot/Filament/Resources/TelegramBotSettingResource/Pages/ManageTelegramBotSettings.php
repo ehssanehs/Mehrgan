@@ -40,25 +40,6 @@ class ManageTelegramBotSettings extends Page implements HasForms
             $settings['deposit_amounts'] = [];
         }
 
-        // Convert old single-card format to new multi-card Repeater format for agent deposit
-        if (isset($settings['agent_deposit_cards'])) {
-            $decodedCards = json_decode($settings['agent_deposit_cards'], true);
-            $settings['agent_deposit_cards'] = is_array($decodedCards) ? $decodedCards : [];
-        } else {
-            // Migrate from old single-card format
-            $oldCardNumber = $settings['agent_deposit_card_number'] ?? null;
-            $oldCardName = $settings['agent_deposit_card_name'] ?? null;
-            if ($oldCardNumber) {
-                $settings['agent_deposit_cards'] = [[
-                    'card_number' => $oldCardNumber,
-                    'card_holder' => $oldCardName ?? '',
-                ]];
-            } else {
-                $settings['agent_deposit_cards'] = [];
-            }
-        }
-
-
         $this->currentAmounts = $settings['deposit_amounts'];
 
         $this->form->fill($settings);
@@ -80,11 +61,6 @@ class ManageTelegramBotSettings extends Page implements HasForms
                     Textarea::make('start_message')->label('پیام دستور /start')->rows(3),
                 ])->columnSpan('full')->hidden(fn() => $this->activeTab !== 'messages'),
 
-//                Section::make('تنظیمات ربات')->schema([
-//                    Textarea::make('bot_name')->label('نام ربات')->rows(1),
-//                    Textarea::make('bot_token')->label('توکن ربات')->rows(1),
-//                ])->columnSpan('full')->hidden(fn() => $this->activeTab !== 'settings'),
-
                 Section::make('تنظیمات کیف پول')
                     ->schema([
                         Repeater::make('deposit_amounts')
@@ -102,27 +78,6 @@ class ManageTelegramBotSettings extends Page implements HasForms
                             ->helperText('این مبالغ به صورت دکمه در ربات به کاربر نمایش داده می‌شوند.'),
                     ]),
 
-                Section::make('تنظیمات نمایندگی')
-                    ->schema([
-                        Repeater::make('agent_deposit_cards')
-                            ->label('کارت‌های بانکی برای شارژ نمایندگان')
-                            ->addActionLabel('افزودن کارت جدید')
-                            ->reorderable()
-                            ->schema([
-                                TextInput::make('card_number')
-                                    ->label('شماره کارت')
-                                    ->mask('9999-9999-9999-9999')
-                                    ->placeholder('6037-1234-5678-9999')
-                                    ->numeric(false)
-                                    ->required(),
-                                TextInput::make('card_holder')
-                                    ->label('نام صاحب کارت')
-                                    ->placeholder('به نام مدیریت پنل')
-                                    ->required(),
-                            ])
-                            ->columns(2)
-                            ->helperText('در صفحه شارژ کیف پول مینی‌اپ نمایندگی، یکی از کارت‌ها به‌صورت تصادفی نمایش داده می‌شود.'),
-                    ]),
             ])
             ->statePath('data');
     }
@@ -137,16 +92,9 @@ class ManageTelegramBotSettings extends Page implements HasForms
             $formData['deposit_amounts'] = json_encode($formData['deposit_amounts']);
         }
 
-        if (isset($formData['agent_deposit_cards'])) {
-            $formData['agent_deposit_cards'] = json_encode($formData['agent_deposit_cards']);
-        }
-
         foreach ($formData as $key => $value) {
             TelegramBotSetting::updateOrCreate(['key' => $key], ['value' => $value ?? '']);
         }
-
-        // Clean up old single-card keys (migrated to agent_deposit_cards Repeater)
-        TelegramBotSetting::whereIn('key', ['agent_deposit_card_number', 'agent_deposit_card_name'])->delete();
 
         Notification::make()->title('تنظیمات با موفقیت ذخیره شد.')->success()->send();
 

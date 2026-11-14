@@ -16,7 +16,8 @@ class BlogCategoryResource extends Resource
     protected static ?string $model = BlogCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
-    protected static ?string $navigationGroup = 'وبلاگ و محتوا';
+    protected static ?string $navigationGroup = 'محتوا';
+    protected static ?int $navigationSort = 20;
     protected static ?string $navigationLabel = 'دسته‌بندی‌ها';
     protected static ?string $modelLabel = 'دسته‌بندی';
     protected static ?string $pluralModelLabel = 'دسته‌بندی‌ها';

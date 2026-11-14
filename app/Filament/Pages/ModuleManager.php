@@ -20,7 +20,8 @@ class ModuleManager extends Page implements HasForms
     protected static string $view = 'filament.pages.module-manager';
     protected static ?string $navigationLabel = 'مدیریت افزونه‌ها';
     protected static ?string $title = 'مدیریت افزونه‌ها';
-    protected static ?string $navigationGroup = 'سیستم';
+    protected static ?string $navigationGroup = 'تنظیمات';
+    protected static ?int $navigationSort = 60;
 
     public static function getNavigationBadge(): ?string
     {
