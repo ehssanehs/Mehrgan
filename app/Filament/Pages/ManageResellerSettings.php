@@ -2,10 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Models\Setting;
 use App\Models\TelegramBotSetting;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Illuminate\Support\Facades\Cache;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
@@ -16,7 +19,8 @@ class ManageResellerSettings extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationGroup = 'مدیریت نمایندگی';
+    protected static ?string $navigationGroup = 'نمایندگی';
+    protected static ?int $navigationSort = 60;
 
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
 
@@ -49,6 +53,13 @@ class ManageResellerSettings extends Page implements HasForms
             }
         }
 
+        // The bot menu toggle lives in the main settings table (the bot reads it
+        // from there), while the deposit cards are stored in telegram_bot_settings.
+        $settings['tg_show_reseller_button'] = filter_var(
+            Setting::where('key', 'tg_show_reseller_button')->value('value') ?? true,
+            FILTER_VALIDATE_BOOLEAN
+        );
+
         $this->form->fill($settings);
     }
 
@@ -56,6 +67,15 @@ class ManageResellerSettings extends Page implements HasForms
     {
         return $form
             ->schema([
+                Section::make('نمایش در ربات')
+                    ->description('کنترل دکمه «نمایندگی» در منوی اصلی ربات تلگرام.')
+                    ->schema([
+                        Toggle::make('tg_show_reseller_button')
+                            ->label('نمایش دکمه «نمایندگی» در منوی ربات')
+                            ->helperText('با خاموش بودن این گزینه، کاربران نمی‌توانند از ربات درخواست نمایندگی ثبت کنند.')
+                            ->default(true),
+                    ]),
+
                 Section::make('تنظیمات شارژ نماینده')
                     ->description('شماره کارت و نام صاحب کارت برای شارژ کیف پول نمایندگان در مینی‌اپ. یکی از کارت‌ها به‌صورت تصادفی به نماینده نمایش داده می‌شود.')
                     ->schema([
@@ -84,6 +104,12 @@ class ManageResellerSettings extends Page implements HasForms
     public function submit(): void
     {
         $data = $this->form->getState();
+
+        $showResellerButton = filter_var($data['tg_show_reseller_button'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        unset($data['tg_show_reseller_button']);
+
+        Setting::updateOrCreate(['key' => 'tg_show_reseller_button'], ['value' => $showResellerButton ? '1' : '0']);
+        Cache::forget('settings');
 
         foreach ($data as $key => $value) {
             if (is_array($value)) {

@@ -25,7 +25,8 @@ class ManageBackups extends Page implements HasActions
     protected static ?string $navigationLabel = 'مدیریت بکاپ‌ها';
     protected static ?string $title = 'مدیریت بکاپ‌ها';
     protected static ?string $slug = 'matin-backups';
-    protected static ?string $navigationGroup = 'سیستم';
+    protected static ?string $navigationGroup = 'تنظیمات';
+    protected static ?int $navigationSort = 70;
 
     public function createBackupAction(): Action
     {

@@ -12,6 +12,11 @@
         <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
             <div class="container">
                 <a class="navbar-brand fw-bold" href="#">{{ $settings->get('aurora_navbar_brand') ?: 'AURORA' }}</a>
+                <div class="d-none d-lg-flex align-items-center gap-4 ms-4 small fw-semibold">
+                    <a href="#features" class="site-nav-link text-decoration-none">ویژگی‌ها</a>
+                    <a href="#pricing" class="site-nav-link text-decoration-none">پلن‌ها</a>
+                    <a href="#faq" class="site-nav-link text-decoration-none">سوالات متداول</a>
+                </div>
                 <a href="{{ auth()->check() ? route('filament.admin.pages.dashboard') : route('login') }}" class="btn btn-outline-primary btn-sm">{{ auth()->check() ? 'پنل کاربری' : 'ورود / ثبت‌نام' }}</a>
             </div>
         </nav>

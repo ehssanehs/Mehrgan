@@ -18,8 +18,8 @@ class ProfitReport extends Page implements HasForms
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
     protected static ?string $navigationLabel = 'گزارش سود';
     protected static ?string $title = 'گزارش سود و فروش';
-    protected static ?string $navigationGroup = 'مدیریت سفارشات';
-    protected static ?int $navigationSort = 5;
+    protected static ?string $navigationGroup = 'فروش';
+    protected static ?int $navigationSort = 40;
 
     protected static string $view = 'filament.pages.profit-report';
 

@@ -17,7 +17,8 @@ class ManageTrialSettings extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationGroup = 'مدیریت کاربران';
+    protected static ?string $navigationGroup = 'تنظیمات';
+    protected static ?int $navigationSort = 30;
     protected static ?string $navigationIcon = 'heroicon-o-sparkles';
     protected static ?string $navigationLabel = 'تنظیمات اکانت تست';
     protected static string $view = 'filament.pages.manage-trial-settings';
@@ -37,6 +38,7 @@ class ManageTrialSettings extends Page implements HasForms
             'trial_duration_hours' => $settings['trial_duration_hours'] ?? 24,
             'trial_limit_per_user' => $settings['trial_limit_per_user'] ?? 1,
             'trial_server_id' => $settings['trial_server_id'] ?? null, // اضافه شد
+            'tg_show_trial_button' => filter_var($settings['tg_show_trial_button'] ?? true, FILTER_VALIDATE_BOOLEAN),
         ]);
     }
 
@@ -88,6 +90,11 @@ class ManageTrialSettings extends Page implements HasForms
                             ->numeric()
                             ->required()
                             ->default(1),
+
+                        Toggle::make('tg_show_trial_button')
+                            ->label('نمایش دکمه «اکانت تست» در منوی ربات')
+                            ->helperText('اگر خاموش باشد، حتی با فعال بودن اکانت تست، دکمه‌ای در ربات نمایش داده نمی‌شود.')
+                            ->default(true),
                     ])
             ])
             ->statePath('data');
@@ -105,20 +112,15 @@ class ManageTrialSettings extends Page implements HasForms
             FILTER_VALIDATE_BOOLEAN
         ) ? '1' : '0';
 
+        $data['tg_show_trial_button'] = filter_var(
+            $data['tg_show_trial_button'] ?? true,
+            FILTER_VALIDATE_BOOLEAN
+        ) ? '1' : '0';
+
         foreach ($data as $key => $value) {
             // تبدیل مقدار null به رشته خالی یا ذخیره نکردن آن
             $val = is_null($value) ? '' : $value;
             Setting::updateOrCreate(['key' => $key], ['value' => $val]);
-        }
-
-        // Activating the feature from this page is also the user's request to
-        // make it available in the bot. Reset the optional visibility override
-        // so an old `tg_show_trial_button=0` value cannot hide the new feature.
-        if ($data['trial_enabled'] === '1') {
-            Setting::updateOrCreate(
-                ['key' => 'tg_show_trial_button'],
-                ['value' => '1']
-            );
         }
 
         Notification::make()->title('تنظیمات با موفقیت ذخیره شد.')->success()->send();

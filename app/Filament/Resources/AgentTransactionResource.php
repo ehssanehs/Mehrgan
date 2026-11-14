@@ -199,4 +199,14 @@ class AgentTransactionResource extends Resource
             'index' => Pages\ListAgentTransactions::route('/'),
         ];
     }
+
+    /**
+     * The legacy Agent models are kept for backwards compatibility only; the
+     * Reseller module is the supported implementation. Hiding them keeps the
+     * navigation free of duplicate "نمایندگان" entries.
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
 }

@@ -14,7 +14,8 @@ class MultiServerSettings extends Page implements Forms\Contracts\HasForms
     use Forms\Concerns\InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog';
-    protected static ?string $navigationGroup = 'مولتی سرور';
+    protected static ?string $navigationGroup = 'سرورها';
+    protected static ?int $navigationSort = 30;
     protected static ?string $navigationLabel = 'تنظیمات مولتی سرور';
     protected static ?string $title = 'تنظیمات سیستم مولتی سرور';
     protected static string $view = 'multiserver::filament.pages.settings';

@@ -9,15 +9,11 @@
     --app-accent-strong: #7b2bff;
     --app-border: rgba(0, 255, 194, .24);
 }
-[data-theme="welcome"] { --app-bg:#121212; --app-surface:#1e293b; --app-surface-muted:rgba(30,41,59,.78); --app-text:#e2e8f0; --app-muted:#cbd5e1; --app-accent:#4ade80; --app-accent-strong:#10b981; --app-border:rgba(255,255,255,.14); }
-[data-theme="rocket"] { --app-bg:#0b0b12; --app-surface:rgba(20,20,30,.88); --app-surface-muted:rgba(255,255,255,.06); --app-text:#f7f8fa; --app-muted:#cfd4e0; --app-accent:#ff3c00; --app-accent-strong:#ff8a00; --app-border:rgba(255,255,255,.12); }
-[data-theme="cyberpunk"] { --app-bg:#0a0a1a; --app-surface:rgba(15,15,35,.88); --app-surface-muted:rgba(15,15,35,.68); --app-text:#e0e0ff; --app-muted:#b7b7db; --app-accent:#00f6ff; --app-accent-strong:#ff00c1; --app-border:rgba(0,246,255,.24); }
-[data-theme="dragon"] { --app-bg:#100505; --app-surface:rgba(30,10,10,.9); --app-surface-muted:rgba(30,10,10,.7); --app-text:#f0e0d0; --app-muted:#d3bba9; --app-accent:#e6b800; --app-accent-strong:#ff6600; --app-border:rgba(255,69,0,.4); }
-[data-theme="phoenix"] { --app-bg:#0a0a0a; --app-surface:rgba(30,15,5,.9); --app-surface-muted:rgba(30,15,5,.7); --app-text:#fff; --app-muted:#d2c4bb; --app-accent:#ffd700; --app-accent-strong:#ff6b35; --app-border:rgba(255,215,0,.22); }
-[data-theme="nebula"] { --app-bg:#03030a; --app-surface:rgba(10,6,30,.9); --app-surface-muted:rgba(10,6,30,.7); --app-text:#f0f0ff; --app-muted:#c0c0dd; --app-accent:#8b5cf6; --app-accent-strong:#3b82f6; --app-border:rgba(139,92,246,.26); }
 [data-theme="aurora"] { --app-bg:#f8f9fb; --app-surface:rgba(255,255,255,.94); --app-surface-muted:rgba(255,255,255,.78); --app-text:#1a1a2e; --app-muted:#596273; --app-accent:#0ea5e9; --app-accent-strong:#6366f1; --app-border:#dce5ed; }
-[data-theme="obsidian"] { --app-bg:#060608; --app-surface:rgba(15,15,24,.92); --app-surface-muted:rgba(15,15,24,.74); --app-text:#f0ebe5; --app-muted:#c5bcaf; --app-accent:#e6b84d; --app-accent-strong:#f2d78a; --app-border:rgba(230,184,77,.24); }
 
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+section[id] { scroll-margin-top: 6rem; }
 .theme-shell { display:block; min-height:100vh; background:var(--app-bg); color:var(--app-text); text-align:right; }
 .theme-panel, .theme-auth-card { background:var(--app-surface); color:var(--app-text); border:1px solid var(--app-border); box-shadow:0 18px 45px rgba(0,0,0,.18); }
 .theme-auth-page { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:2rem 1rem; background:var(--app-bg); }
@@ -134,4 +130,23 @@
 .theme-shell .to-blue-600,
 .theme-shell .dark\:to-blue-400 {
     --tw-gradient-to:var(--app-accent) var(--tw-gradient-to-position, 100%) !important;
+}
+
+/* Landing-page navigation: one rule set for both palettes. Opacity is applied
+   to the theme text colour instead of a fixed gray, which keeps the links
+   readable on the near-black and on the near-white background. */
+.site-nav-link { color: var(--app-text); opacity: .78; transition: opacity .2s, color .2s; }
+.site-nav-link:hover, .site-nav-link:focus-visible { opacity: 1; color: var(--app-accent); }
+[data-theme="aurora"] .navbar-brand { color: #0369a1 !important; }
+
+/* Bootstrap's fixed secondary gray fails AA on the light palette and is too
+   dark on the dark one; map it to the theme's own muted tone. */
+.theme-shell .text-secondary { color: var(--app-muted) !important; }
+.theme-shell footer a { color: var(--app-text); text-decoration: underline; text-underline-offset: 3px; }
+.theme-shell footer a:hover, .theme-shell footer a:focus-visible { color: var(--app-accent); }
+[data-theme="aurora"] .btn-outline-primary {
+    --bs-btn-color: #0b5ed7;
+    --bs-btn-border-color: #0b5ed7;
+    --bs-btn-hover-bg: #0b5ed7;
+    --bs-btn-hover-border-color: #0b5ed7;
 }

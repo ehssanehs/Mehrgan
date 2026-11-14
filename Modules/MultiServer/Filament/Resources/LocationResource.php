@@ -14,7 +14,9 @@ class LocationResource extends Resource
 {
     protected static ?string $model = Location::class;
     protected static ?string $navigationIcon = 'heroicon-o-globe-alt';
-    protected static ?string $navigationGroup = 'مولتی سرور';
+    protected static ?string $navigationGroup = 'سرورها';
+    protected static ?string $navigationLabel = 'لوکیشن‌ها';
+    protected static ?int $navigationSort = 10;
     protected static ?string $label = 'لوکیشن';
     protected static ?string $pluralLabel = 'لوکیشن‌ها';
 

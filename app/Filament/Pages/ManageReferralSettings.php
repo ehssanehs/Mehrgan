@@ -17,11 +17,11 @@ class ManageReferralSettings extends Page implements HasForms
 {
     use InteractsWithForms;
 
-    protected static ?string $navigationGroup = 'مدیریت افزونه‌ها';
+    protected static ?string $navigationGroup = 'تنظیمات';
     protected static ?string $navigationIcon = 'heroicon-o-gift';
     protected static ?string $navigationLabel = 'تنظیمات دعوت (رفرال)';
     protected static ?string $title = 'مدیریت تنظیمات سیستم دعوت';
-    protected static ?int $navigationSort = 20;
+    protected static ?int $navigationSort = 50;
 
     protected static string $view = 'filament.pages.manage-referral-settings';
 

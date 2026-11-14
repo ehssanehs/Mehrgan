@@ -14,7 +14,8 @@ class TelegramBotSettingResource extends Resource
     // فقط navigation رو اینجا بذار
     protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-bottom-center-text';
     protected static ?string $navigationLabel = 'محتوای ربات تلگرام';
-    protected static ?string $navigationGroup = 'مدیریت افزونه‌ها';
+    protected static ?string $navigationGroup = 'تنظیمات';
+    protected static ?int $navigationSort = 20;
 
     public static function form(Form $form): Form
     {

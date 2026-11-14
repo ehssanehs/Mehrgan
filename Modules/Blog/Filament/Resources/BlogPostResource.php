@@ -17,7 +17,8 @@ class BlogPostResource extends Resource
 {
     protected static ?string $model = BlogPost::class;
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    protected static ?string $navigationGroup = 'وبلاگ و محتوا';
+    protected static ?string $navigationGroup = 'محتوا';
+    protected static ?int $navigationSort = 10;
     protected static ?string $navigationLabel = 'پست‌ها';
     protected static ?string $modelLabel = 'پست';
     protected static ?string $pluralModelLabel = 'لیست پست‌ها';

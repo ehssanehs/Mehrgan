@@ -17,7 +17,8 @@ class VpnProductResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
 
-    protected static ?string $navigationGroup = 'مدیریت نمایندگی';
+    protected static ?string $navigationGroup = 'نمایندگی';
+    protected static ?int $navigationSort = 40;
 
     protected static ?string $navigationLabel = 'محصولات VPN';
 

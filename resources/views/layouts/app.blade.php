@@ -1,7 +1,7 @@
 @php
-    $activeTheme = \App\Models\Setting::query()->where('key', 'active_theme')->value('value') ?: 'arcane';
-    $availableThemes = ['welcome', 'rocket', 'arcane', 'cyberpunk', 'dragon', 'phoenix', 'nebula', 'aurora', 'obsidian'];
-    $activeTheme = in_array($activeTheme, $availableThemes, true) ? $activeTheme : 'arcane';
+    // Single source of truth for the active palette; unknown or removed
+    // themes fall back to the default one.
+    $activeTheme = \App\Support\SiteTheme::active();
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" dir="rtl" data-theme="{{ $activeTheme }}">

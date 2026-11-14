@@ -21,8 +21,8 @@ class ReferralResource extends Resource
     protected static ?string $pluralModelLabel = 'گزارش دعوت‌ها';
     protected static ?string $slug = 'referrals';
 
-    protected static ?string $navigationGroup = 'مدیریت افزونه‌ها';
-    protected static ?int $navigationSort = 21;
+    protected static ?string $navigationGroup = 'کاربران';
+    protected static ?int $navigationSort = 30;
 
     public static function form(Form $form): Form
     {
