@@ -71,13 +71,13 @@ class ManageSequentialNaming extends Page implements HasForms
                                 $prefix = $get('prefix') ?? SequentialNamingSetting::currentPrefix();
                                 $counter = SequentialNamingSetting::currentCounter();
                                 $next = $counter + 1;
-                                return new HtmlString("<span class='font-mono font-bold text-primary-600'>{$prefix}{$next}</span>");
+                                return new HtmlString("<span class='font-mono font-bold'>{$prefix}{$next}</span>");
                             }),
 
                         Placeholder::make('info')
                             ->label('راهنما')
                             ->content(new HtmlString('
-                                <ul class="list-disc list-inside space-y-1 text-sm text-gray-600">
+                                <ul class="list-disc list-inside space-y-1 text-sm">
                                     <li>شماره‌گذاری همیشه افزایشی است</li>
                                     <li>حذف کاربران باعث استفاده مجدد شماره‌ها نمی‌شود</li>
                                     <li>تغییر پیشوند، شمارنده را به 0 ریست می‌کند و نام‌گذاری از 1 شروع می‌شود</li>
