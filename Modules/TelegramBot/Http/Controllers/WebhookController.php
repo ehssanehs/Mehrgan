@@ -4942,22 +4942,32 @@ class WebhookController extends BaseController
 
             $configLink = null;
             $panelType = $settings->get('panel_type');
+            $panelType = is_string($panelType) ? strtolower(trim($panelType)) : $panelType;
+            if ($panelType === 'sanaei') {
+                $panelType = 'xui';
+            }
 
             // --- تنظیمات سرور (Multi-Server Logic) ---
-            $isMultiLocationEnabled = filter_var($settings->get('enable_multilocation', false), FILTER_VALIDATE_BOOLEAN);
+            // Server selection must behave like the purchase flow: whenever the
+            // MultiServer module has servers, they are used. The old condition
+            // also required the legacy `enable_multilocation` flag, which is
+            // only written by the site-settings page — installations that
+            // manage servers exclusively from the "Multi Server" menu never
+            // saved it, so every trial request fell back to empty legacy
+            // settings (a null panel host) and failed.
             $targetServer = null;
 
             // 1. خواندن آیدی سرور تنظیم شده برای تست (از تنظیمات جدید)
             $forcedServerId = $settings->get('trial_server_id');
 
-            // مقادیر پیش‌فرض
+            // مقادیر پیش‌فرض (حالت تک‌سرور قدیمی)
             $xuiHost = $settings->get('xui_host');
             $xuiUser = $settings->get('xui_user');
             $xuiPass = $settings->get('xui_pass');
             $inboundId = (int) $settings->get('xui_default_inbound_id');
             $linkType = $settings->get('xui_link_type', 'single');
 
-            if ($isMultiLocationEnabled && class_exists('Modules\MultiServer\Models\Server')) {
+            if (class_exists('Modules\MultiServer\Models\Server')) {
 
                 // الف) اگر ادمین سرور خاصی را در تنظیمات انتخاب کرده باشد
                 if (!empty($forcedServerId)) {
@@ -4970,7 +4980,14 @@ class WebhookController extends BaseController
                 if (!$targetServer) {
                     $targetServer = \Modules\MultiServer\Models\Server::where('is_active', true)
                         ->whereRaw('current_users < capacity')
+                        ->orderBy('current_users', 'asc')
                         ->first();
+                }
+
+                // ج) همه سرورها پر شده‌اند ولی ظرفیت ثبت‌شده ممکن است قدیمی
+                //    باشد؛ مثل مسیر خرید، آخرین سرور فعال را انتخاب کن.
+                if (!$targetServer) {
+                    $targetServer = \Modules\MultiServer\Models\Server::where('is_active', true)->first();
                 }
 
                 // اعمال تنظیمات سرور انتخاب شده
@@ -4991,6 +5008,21 @@ class WebhookController extends BaseController
                     $pasarguardPass = $targetServer->password;
                     $pasarguardNode = $targetServer->pasarguard_node_hostname ?? $pasarguardHost;
                 }
+            }
+
+            // حالت تک‌سرور قدیمی: اگر سروری در ماژول مولتی‌سرور تعریف نشده
+            // باشد و نوع پنل هم ذخیره نشده باشد، مثل مسیر خرید آن را از روی
+            // تنظیمات موجود حدس بزن تا خطای مبهم رخ ندهد.
+            if (!$targetServer && empty($panelType)) {
+                $hasXui = !empty($settings->get('xui_host')) && !empty($settings->get('xui_user')) && !empty($settings->get('xui_pass'));
+                $hasMarzban = !empty($settings->get('marzban_host'));
+                $hasPasarguard = !empty($settings->get('pasarguard_host'));
+
+                $panelType = $hasXui ? 'xui' : ($hasMarzban ? 'marzban' : ($hasPasarguard ? 'pasarguard' : ''));
+            }
+
+            if (!$targetServer && empty($panelType)) {
+                throw new \Exception('هیچ سرور فعالی برای ساخت اکانت تست تنظیم نشده است.');
             }
 
             if ($panelType === 'pasarguard') {
@@ -5050,7 +5082,15 @@ class WebhookController extends BaseController
                 }
 
             } elseif ($panelType === 'xui') {
-                $xuiService = new XUIService($xuiHost, $xuiUser, $xuiPass);
+                // A null host (legacy settings never configured) used to raise a
+                // TypeError, which is not caught by `catch (\Exception)` and
+                // turned the webhook into an HTTP 500. Fail with a readable
+                // exception so the error is logged and reported properly.
+                if (trim((string) $xuiHost) === '') {
+                    throw new \Exception('آدرس پنل X-UI برای ساخت اکانت تست تنظیم نشده است.');
+                }
+
+                $xuiService = new XUIService((string) $xuiHost, (string) $xuiUser, (string) $xuiPass);
 
                 if (!$xuiService->login()) {
                     throw new \Exception('خطا در لاگین به پنل X-UI.');
@@ -5238,10 +5278,18 @@ class WebhookController extends BaseController
 
                     Log::info('Trial account created successfully', ['user_id' => $user->id, 'username' => $uniqueUsername]);
                     }}
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Catch Throwable (not only Exception) so a TypeError from a
+            // misconfigured value cannot turn the webhook into a 500. The log
+            // records the resolved panel/server, which is what makes this class
+            // of failure diagnosable. Credentials are never logged.
             Log::error('Trial Account Creation Failed', [
                 'user_id' => $user->id,
-                'error' => $e->getMessage()
+                'exception' => $e::class,
+                'error' => $e->getMessage(),
+                'panel_type' => $panelType ?? null,
+                'server_id' => ($targetServer ?? null)?->id,
+                'panel_host' => isset($xuiHost) ? (parse_url((string) $xuiHost, PHP_URL_HOST) ?: null) : null,
             ]);
 
             Telegram::sendMessage([
